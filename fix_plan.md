@@ -27,7 +27,11 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
       equation: split only at whitespace between blocks (the _Flow already groups
       by atoms, so increasing effective width per sub-page is the lever). Keep
       reading order. Verify font goes up AND #1 stays fixed (no new splits).
-- [ ] **#3 Re-verify all three** against acceptance: font as large as design
+- [ ] **#3 Minor: residual blank/clipped pages.** Metric pass-1: MIT blank=3,
+      LeCun blank=2 + clipped_pages=1. Investigate the 1 LeCun clipped page
+      (content bbox past page edge) and the handful of blanks; likely oversized-
+      block pages or end-of-section. Low priority vs #1/#2.
+- [ ] **#4 Re-verify all three** against acceptance: font as large as design
       allows, zero splits/blanks/clipping, MonoBite unchanged.
 
 ## Done
