@@ -1,0 +1,60 @@
+\section{Existence and Uniqueness of Continuous-time Markov chains}
+\label{appendix:existence_uniquenss_ctmcs}
+We prove \cref{thm:ctmc_existence_and_uniqueness} in this section.
+\begin{proof}
+\textbf{Uniqueness:} We need to show that there can be only one transition kernel $p_{t'|t}(X_{t'}=y|X_{t}=x)$ that satisfies \cref{eq:ctmc_ode}. As a first step, we realize that \cref{eq:ctmc_ode} implies that
+\begin{align}
+    &\frac{\dd}{\dd t'}p_{t'|t}(X_{t'}=y|X_{t}=x)\\
+=&\frac{\dd}{\dd h}p_{t'+h|t}(X_{t'+h}=y|X_{t}=x)_{|h=0}\\
+=&\frac{\dd}{\dd h}\left[\sum\limits_{z\in S}p_{t'+h|t'}(X_{t'+h}=y|X_{t'}=z)p_{t'|t}(X_{t'}=z|X_{t}=x)\right]_{|h=0}\\
+=&\sum\limits_{z\in S}Q_{t'}(y|z)p_{t'|t}(X_{t'}=z|X_{t}=x)
+\end{align}
+For fixed $x,t$, one can consider $t'\mapsto p_{t'|t}(X_{t'}=y|X_t=x)$ as a vector-valued function and the above is a linear ODE of that function (the Kolmgorov forward equation, in fact, see \cref{prop:kfe_ctmc}) with a known initial condition, i.e. $p_{t|t}(X_{t}=y|X_{t}=x)=\delta_{y}(x)$. As we know, every linear ODE has a unique solution (see \cref{thm:ode_existence_and_uniqueness}), therefore $p_{t'|t}(X_{t'}=y|X_{t}=x)$ must also be unique.
+
+\textbf{Existence: }Conversely, any linear ODE has a solution, i.e. we know that for every $x,t$ there is a $p_{t'|t}(X_{t'}=y|X_{t}=x)$ such that 
+\begin{align}
+\label{eq:initial_conditional_ctmc_ode}
+    p_{t|t}(X_{t}=y|X_{t}=x)&=\delta_{y}(x)\\
+\frac{\dd}{\dd t'}p_{t'|t}(X_{t'}=y|X_{t}=x)&=\sum\limits_{z\in S}Q_{t'}(y|z)p_{t'|t}(X_{t'}=z|X_t=x)
+\end{align}
+For $t'=t$, this implies \cref{eq:ctmc_ode} in particular. It remains to show that $p_{t'|t}(X_{t'}=y|X_{t}=x)$ is a valid transition kernel in this case, i.e. the following 3 properties must hold:
+\begin{align}
+    \sum\limits_{y\in S}p_{t'|t}(X_{t'}=y|X_{t}=x)=&1\\
+    p_{t'|t}(X_{t'}=y|X_{t}=x)\geq& 0\\
+    \sum\limits_{z\in S}p_{t_{2}|t_{1}}(X_{t_2}=y|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)=&p_{t_2|t_0}(y|x)
+\end{align}
+To the first property, one can observe that it holds for $t'=t$ by \cref{eq:initial_conditional_ctmc_ode} and that 
+\begin{align}
+&\frac{\dd}{\dd t'}\sum\limits_{y\in S}p_{t'|t}(X_{t'}=y|X_{t}=x)\\
+=&\sum\limits_{y\in S}\frac{\dd}{\dd t'}p_{t'|t}(X_{t'}=y|X_{t}=x)\\
+=&\sum\limits_{z\in S}\left[\sum\limits_{y\in S}Q_{t'}(y|z)\right]p_{t'|t}(X_{t'}=z|X_t=x)\\
+=&0
+\end{align}
+where we used the fact that the columns of rate matrices sum to $0$. To show the second property, note that it holds at time $t'=t$. Further, whenever $p_{t'|t}(X_{t'}=y|X_{t}=x)=0$, it must hold that 
+\begin{align*}
+\frac{\dd}{\dd t'}p_{t'|t}(X_{t'}=y|X_{t}=x)&=\sum\limits_{z\neq y}\underbrace{Q_{t'}(y|z)}_{\geq 0}p_{t'|t}(X_{t'}=z|X_t=x)\\
+&\geq 0
+\end{align*}
+Therefore, whenever $p_{t'|t}(X_{t'}=y|X_{t}=x)=0$, it can only increase. Therefore, $p_{t'|t}(X_{t'}=y|X_{t}=x)$ will never be negative.\\
+
+To show the third property, define $q_{t_2|t_0}(y|x)$ to be 
+\begin{align*}
+q_{t_2|t_0}(y|x)=&\sum\limits_{z\in S}p_{t_{2}|t_{1}}(X_{t_2}=y|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)
+\end{align*}
+Then we know that 
+\begin{align*}
+    q_{t_2=t_1|t_0}(y|x)=&\sum\limits_{z\in S}\delta_{y}(z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)=p_{t_1|t_0}(X_{t_1}=y|X_{t_0}=x)
+\end{align*}
+and
+\begin{align*}
+\frac{\dd}{\dd t_2}q_{t_2|t_0}(y|x)=&\sum\limits_{z\in S}\frac{\dd}{\dd t_2}p_{t_{2}|t_{1}}(X_{t_2}=y|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)\\
+=&\sum\limits_{z\in S}\sum\limits_{\tilde{z}\in S}Q_{t_2}(y|\tilde{z})p_{t_2|t_1}(X_{t_2}=\tilde{z}|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)\\
+=&\sum\limits_{\tilde{z}\in S}Q_{t_2}(y|\tilde{z})\left[\sum\limits_{z\in S}p_{t_2|t_1}(X_{t_2}=\tilde{z}|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)\right]\\
+=&\sum\limits_{\tilde{z}\in S}Q_{t_2}(y|\tilde{z})q_{t_2|t_0}(\tilde{z}|x)
+\end{align*}
+This shows that $p_{t_2|t_0}(z|x)$ and $q_{t_2|t_0}(z|x)$ fulfill the same ODE. Hence, it must hold 
+\begin{align*}
+\sum\limits_{z\in S}p_{t_{2}|t_{1}}(X_{t_2}=y|X_{t_1}=z)p_{t_1|t_0}(X_{t_1}=z|X_{t_0}=x)=&q_{t_2|t_0}(y|x)=p_{t_2|t_0}(y|x)
+\end{align*}
+This shows the third property. So $p_{t'|t}(y|x)$ is indeed the transition kernel satisfying \cref{eq:ctmc_ode}. This finishes the proof.
+\end{proof}

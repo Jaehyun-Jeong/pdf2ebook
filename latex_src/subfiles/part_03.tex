@@ -1,0 +1,433 @@
+\section{Flow Matching}
+\label{sec:flow_matching}
+
+In the previous section, we constructed flow and diffusion models as generative models parameterized by a neural network vector field $u_t^\theta$. However, we have not yet discussed how to \emph{train} them, i.e. how to optimize the parameters $\theta$ such that generative model returns something sensible, e.g. a nice-looking image or exciting video. Next, we discuss \themebf{flow matching} \citep{lipman2022flow,albergo2023stochastic, liu2022flow}, a  algorithm to train $u_t^\theta$ that is simple, scalable, and represents the current state-of-the-art.
+
+In this section, we restrict ourselves to flow models, i.e. we have a neural network $u_t^\theta$ and obtain samples from the generative model by simulating the ODE 
+\begin{align}
+\label{e:sde_generative_model_restated_section_3}
+ X_0\sim&\pinit,\quad \dd X_t = u_t^\theta(X_t)\dd t& \text{(Flow model)}
+\end{align}
+and using the endpoints $X_1$ fro $t=1$ as samples. As we discussed, our goal is that $X_1$ is distributed according to the data distribution $\pdata$, i.e. $X_1\sim \pdata$. Therefore, the question ``how to train'' the neural network is really the following question: \textbf{How do we optimize $\theta$ such that simulating the flow model in \cref{e:sde_generative_model_restated_section_3} results in samples from the data distribution $X_1\sim \pdata$?} 
+
+
+
+% We accomplish this by minimizing a loss function $\mathcal{L}(\theta)$, such as the \themebf{mean-squared error}
+% \begin{align*}
+%     \mathcal{L}(\theta) = \lVert u_t^\theta(x)-\underbrace{\uref_t(x)}_{\text{training target}}\rVert^2 ,
+% \end{align*}
+% where $\uref_t(x)$ is the \themebf{training target} that we would like to approximate. To derive a training algorithm, we proceed in two steps: In this chapter, our goal is to \textbf{find an equation for the training target $\uref_t$}. In the next chapter, we will describe a training algorithm that approximates the training target $\uref_t$. Naturally, like the neural network $u_t^\theta$, the training target should itself be a vector field $\uref_t:\mathbb{R}^d\times[0,1]\to\mathbb{R}^d$. Further, $\uref_t$ should do what we want $u_t^\theta$ to do: convert noise into data. \textbf{Therefore, the goal of this chapter is to derive a formula for the training target $u_t^\text{ref}$ such that the corresponding ODE/SDE converts $\pinit$ into $\pdata$}. Along the way we will encounter two fundamental results from physics and stochastic calculus: the \themebf{continuity equation} and the \themebf{Fokker-Planck equation}. As before, we will first describe the key ideas for ODEs before generalizing them to SDEs.
+
+% \begin{remarkbox}
+% There are a number of different approaches to deriving a training target for flow and diffusion models. The approach we present here is both the most general and arguably most simple and is in line with recent state-of-the-art models. However, it might well differ from other, older presentations of diffusion models you have seen. Later, we will discuss  alternative formulations.
+% % \cref{subsec:guide_to_flow_matching_literature}.
+% \end{remarkbox}
+
+\begin{figure}[h!]
+    \centering
+    \begin{tabular}{ccc}
+         \includegraphics[width=\textwidth]{figures/noised_mnist_reversed.png} &
+    \end{tabular}
+    \caption{\label{fig:noising_image} Gradual interpolation from noise to data via  a Gaussian conditional probability path for a collection of images. Note that each image is a data point of dimension $d=32\times 32$, so we are plotting individual samples from the probability path, while in \cref{fig:cond_marginal_path_histograms} we plot the distribution as a 2d histogram.}
+\end{figure}
+\vspace{-1em}
+\subsection{Conditional and Marginal Probability Path}
+
+The first step of flow matching is to specify a \themebf{probability path}. Intuitively, a probability path specifies a gradual interpolation between noise $\pinit$ and data $\pdata$ (see \cref{fig:noising_image}). But why would we want that? Remember that our desired ODE trajectory fulfills $X_0\sim \pinit$ for $t=0$ and $X_1\sim \pdata$ for $t=1$. But what about times $0<t<1$ in between start and end? It turns out that we have some freedom to choose what should happen in between and this is what is mathematically formalized in a probability path.
+
+In the following, for a data point $z\in\mathbb{R}^d$, we denote with $\delta_{z}$ the \themebf{Dirac delta} ``distribution''. This is the simplest distribution that one can imagine: sampling from $\delta_{z}$ always returns $z$ (i.e. it is deterministic). A \themebf{conditional (interpolating) probability path} is a set of distribution $p_t(x|z)$ over $\mathbb{R}^d$ such that:
+\begin{align}
+    % p_t(\cdot|z) \text{ distribution over }\R^d \quad (0\leq t\leq 1)\\
+\label{eq:interpolating_condition_conditional_path}
+    p_0(\cdot|z)=\pinit, \quad p_1(\cdot|z)=\delta_{z}\quad \text{ for all }z\in\R^d.
+\end{align}
+In other words, a conditional probability path gradually converts the initial distribution $\pinit$ into a \themeit{single} data point (see e.g. \cref{fig:noising_image}). You can think of a probability path as a trajectory in the space of distributions.
+
+Every conditional probability path $p_t(x|z)$ induces a \themebf{marginal probability path} $p_t(x)$ defined as the distribution that we obtain by first sampling a data point $z\sim \pdata$ from the data distribution and then sampling from $p_t(\cdot|z)$:
+\begin{align}
+    \label{eq:marginal_prob_path}
+    z&\sim\pdata, \quad x\sim p_t(\cdot|z)\quad \Rightarrow x\sim p_t &&\blacktriangleright\,\,\text{sampling from marginal path}\\
+\label{eq:marginal_prob_path_integral}
+    p_t(x) &= \int p_t(x|\dap) \pdata (z) \dd z &&\blacktriangleright\,\,\text{density of marginal path}
+\end{align}
+Note that we know how to sample from $p_t$ but we don't know the density values $p_t(x)$ as the integral is intractable (i.e. we can actually compute \cref{eq:marginal_prob_path} but not \cref{eq:marginal_prob_path_integral}). Check for yourself that because of the conditions on $p_t(\cdot|z)$ in \cref{eq:interpolating_condition_conditional_path}, the marginal probability path $p_t$ interpolates between $\pinit$ and $\pdata$:
+\begin{align}
+\label{eq:noise_interpolation}
+p_0 =\pinit\quad\text{and}\quad p_1=\pdata.\quad\quad\quad\quad \blacktriangleright\,\,\text{noise-data interpolation}
+\end{align}
+The - by far - most important example of a probability path is the Gaussian probability path - hence, we strongly recommend reading the next example thoroughly.
+\begin{figure}[!t]
+    \centering
+    \begin{tabular}{ccc}
+\includegraphics[width=\textwidth]{figures/conditional_vs_marginal.png} &
+         % \includegraphics[width=0.3\textwidth]{fm_guide_assets/flow_16.png} 
+    \end{tabular}
+\caption{\label{fig:cond_marginal_path_histograms}Illustration of a conditional (top) and marginal (bottom) probability path. Here, we plot a Gaussian probability path with $\alpha_t=t,\beta_t=1-t$. The conditional probability path interpolates a Gaussian $\pinit=\mathcal{N}(0,I_d)$ and $\pdata=\delta_{z}$ for single data point $z$. The marginal probability path interpolates a Gaussian and a data distribution $\pdata$ (Here, $\pdata$ is a toy distribution in dimension $d=2$ represented by a chess board pattern.)}
+\end{figure}
+% Note our goal in \cref{e:end_points_match} doesn't say anything about how $p_t^\theta$ should look like for intermediate time points $0<t<1$. Therefore, there is more degrees of freedom that we are allowed to choose.\footnote{It is also possible to optimize over all possible $p_t^\theta$. An example is Neural ODEs (see \cref{subsec:neural_odes}) or Schrödinger Bridges \citep{shi2024diffusion}. However, these methods usually don't scale well to large high-dimensional data such as images, videos, or molecules.}We do so by specifying an \themebf{(interpolating) probability path} $(p_t)_{0\leq t\leq 1}$ given by:
+% \begin{align}
+%     p_t \text{ distribution over }\R^d \quad (0\leq t\leq 1)\\
+%     \label{eq:interpolating_condition}
+%     p_0=\pinit, \quad p_1=\pdata
+% \end{align}
+% Intuitively, an interpolating probability path starts at the distribution $\pinit$ and ends at distribution $\pdata$. With this, we can say that we want $p_t^\theta$ to match $p_t$ along the entire trajectory:
+% \begin{align}
+%     \label{eq:prob_path_matching}
+%     \textbf{Matching probability paths: }p_t^\theta = p_t \quad \text{ for all }0\leq t \leq 1
+% \end{align}
+% Therefore, we guide the trajectory for all $0\leq t\leq 1$. This is a stronger but sufficient requirement for final distributions to match (see \cref{e:end_points_match}). However, it is intuitive why this might be beneficial: we give "feedback" along the whole trajectory instead of only at the end. The most important reason is however: There exists a nice mathematical equation to ensure that \cref{eq:prob_path_matching} holds, specifically the famous \emph{Fokker-Planck Equation} that we will explain in the next section. In this section, it remains to explain how one can construct interpolating probability paths.
+
+% \paragraph{Conditional probability path.} Let us consider the most simple data distribution that one can imagine: a single data point. In other words, $\pdata=\delta_{\dap}$ where $z\in\mathbb{R}^d$ is a fixed point. The notation $\delta_{\dap}$ refers to the \themebf{Dirac delta} distribution.  Sampling from $\pdata=\delta_{\dap}$ will always return the same point $\dap$. It is therefore a rather trivial distribution. Let us try to convert $\delta_z$ into the distribution $\pinit$. We do this via \themebf{conditional (interpolating) probability path} $p_t(x|z)$ defined via
+% \begin{align}
+%     p_t(\cdot|z) \text{ distribution over }\R^d \quad (0\leq t\leq 1)\\
+% \label{eq:interpolating_condition_conditional_path}
+%     p_0(\cdot|z)=\pinit, \quad p_1(\cdot|z)=\delta_{z}\quad \text{ for all }z\in\R^d
+% \end{align}
+% In other words, a conditional probability path gradually converts a single data point into the distribution $p_0=\pinit$. Let's examine several examples of conditional probability paths.
+
+\begin{examplebox}[Gaussian Conditional Probability Path]
+\label{example:gaussian_path}
+    One particularly popular probability path is the \themebf{Gaussian probability path}. This is the \textbf{probability path used by most state-of-the-art models}. Let $\alpha_t,\beta_t$ be \themebf{noise schedulers}: two continuously differentiable, monotonic functions with $\alpha_0=\beta_1=0$ and $\alpha_1=\beta_0=1$. We then define the conditional probability path
+\begin{align}
+\label{eq:gaussian_conditional_probability_paths}
+p_t(\cdot|\dap) &= \mathcal{N}(\alpha_t \dap,\beta_t^2 I_d)
+& \blacktriangleright \,\, \text{Gaussian conditional path}
+\end{align}
+which, by the conditions we imposed on $\alpha_t$ and $\beta_t$, fulfills
+\begin{align*}
+    p_0(\cdot|\dap) &= \mathcal{N}(\alpha_0 \dap,\beta_0^2 I_d) = \mathcal{N}(0,I_d),\quad \text{and}\quad
+p_1(\cdot|\dap) = \mathcal{N}(\alpha_1 \dap,\beta_1^2 I_d) = \delta_{\dap},
+\end{align*}
+where we have used the fact that a normal distribution with zero variance and mean $\dap$ is just $\delta_{\dap}$. Therefore, this choice of $p_t(x|\dap)$ fulfills \cref{eq:interpolating_condition_conditional_path} for $\pinit=\mathcal{N}(0,I_d)$ and is therefore a valid conditional interpolating path.
+% The Gaussian conditional probability path has several useful properties which makes it especially amenable to our goals, and because of this we will use it as our prototypical example of a conditional probability path for the rest of the section. 
+In \cref{fig:noising_image}, we illustrate its application to an image. We can express sampling from the marginal path $p_t$ as: 
+\begin{align}
+    \label{eq:gaussian_prob_path_sampling}
+    z\sim&\pdata,\,\epsilon\sim\pinit = \mathcal{N}(0,I_d) \,\Rightarrow\, x=\alpha_tz+\beta_t \epsilon\sim p_t \quad &\blacktriangleright \,\,\text{sampling from marginal Gaussian path}
+\end{align}
+Intuitively, the above procedure adds more noise for lower $t$ until time $t=0$, at which point there is only noise. In \cref{fig:cond_marginal_path_histograms}, we plot an example of such an interpolating path.
+\end{examplebox}
+
+% \paragraph{Marginal probability path.}
+% Let now be $\pdata$ be arbitrary again. How can we convert $\pdata$ into $\pinit$? As we just learnt, we can do it for a fixed data point $z\in \mathbb{R}^d$ with a conditional interpolating path $p_t(\cdot|z)$. We can naturally extend this to $\pdata$ via the hierarchical sampling procedure:
+% \begin{subequations}
+% \label{eq:sampling_procedure_marginal_path}
+% \begin{align}
+%     &\text{Step 1. Draw random data point from data set: }z\sim \pdata\\
+%     &\text{Step 2. Draw sample from conditional interpolating path: }x\sim p_t(\cdot|z)
+% \end{align}
+% \end{subequations}
+
+% We call the distribution $p_t$ of the resulting sample $x$ the \themebf{marginal (interpolating) probability path}, i.e. $x\sim p_t$. We can express the probability density of $p_t$ via
+% \begin{align}
+%     \label{eq:marginal_prob_path}
+%     p_t(x) = \int p_t(x|\dap) \pdata (z) \dd z
+% \end{align}
+% i.e. we marginalize over the data distribution. Note that because of the conditions on $p_t(\cdot|z)$ in \cref{eq:interpolating_condition_conditional_path}, the marginal probability path $p_t$ interpolates between $\pinit$ and $\pdata$:
+% \begin{align*}
+% p_0 = \pinit,\quad p_1=\pdata
+% \end{align*}
+% You can check this for yourself: If $t=0$, then $p_t(x|z)=\pinit$ regardless of $z$ (see \cref{eq:interpolating_condition_conditional_path}). Therefore, our sample $x$ will always be a sample $\pinit$ regardless of $z$. Therefore, $p_0=\pinit$. For $t=1$, we know by the definition of $\delta_{\dap}$ that $x=z\sim \pdata$. Therefore, $x\sim p_1=\pdata$.
+
+% In other words, we found a gradual way of converting data $\pdata$ into noise $\pinit$. In \ph{INSERT FIGURE}, we plot the marginal probability path of a simple data distribution.
+% How would we construct an interpolating probability path? The answer is by choosing a conditional path $p_t(x|\dap)$ and then define
+% \begin{align}
+%     p_t(x) = \int p_t(x|\dap) \pdata (z) \dd z
+% \end{align}
+% To differentiate it from $p_t(x|z)$, we call now $p_t(x)$ the \themebf{marginal (interpolating) probability path} (because you obtain it from $p_t(x|z)$ by marginalizing over the data distribution $\pdata$). The above expresses $p_t$ in the form of its probability density as an integral. It might be easier to think about how we would draw samples from the distribution $p_t$. This can be done as follows:
+% \begin{align*}
+%     &\text{Step 1. Draw random data point from data set: }z\sim \pdata\\
+%     &\text{Step 2. Draw sample from conditional interpolating path: }x\sim p_t(\cdot|z)\\
+%     \Rightarrow &\text{The resulting sample }x\text{ will have distribution }p_t
+% \end{align*}
+%This shows that, as desired, $p_t$ interpolates $\pinit$ and $\pdata$ (i.e. \cref{eq:interpolating_condition} is fulfilled).
+
+
+
+
+% \paragraph{Summary.} Let us summarize the results of this section. In order to generate samples from $\pdata$, we choose an conditional interpolating probability path $p_t(x|\daz)$ that converts data into "noise", i.e. that fulfils
+% \begin{align*}
+%     \textbf{Conditional (interpolating) probability path: } p_0(\cdot|z)=\pinit, p_1(\cdot|z)=\delta_{z}
+% \end{align*}
+% and construct a diffusion model with neural network $u_t^\theta$
+% \begin{align}
+% \label{e:sde_generative_model_restated_section_3}
+%  \textbf{diffusion model: }X_0\sim&\pinit,\quad \dd X_t = u_t^\theta(X_t)\dd t + \sigma_t\dd W_t
+% \end{align}
+% Our goal is to train $u_t^\theta$ such that it reverses this noising process, i.e. such that the distribution $p_t^\theta$ of $X_t$ matches the distribution marginalized over data points:
+% \begin{align}
+% \label{eq:prob_path_matching_summary}
+%     \textbf{Matching marginal probability paths: }p_t^\theta = p_t =\int p_t(x|z)\pdata(z)\dd z \quad \text{ for all }0\leq t \leq 1
+% \end{align}
+% Step-by-step we now made the generative model problem more specific. The problem is that \cref{eq:prob_path_matching_summary} is a condition that is hard to train a machine learning for: remember, we only have access to the neural network $u_t^\theta$ explicitly but we don't really know $p_t^\theta$. Fortunately, there is a famous equation that allows us to simplify it further that we will discuss next.
+
+
+
+\subsection{Conditional and Marginal Vector Fields}
+
+A probability path $(p_t)_{0\leq t\leq 1}$ specifies what distributions $X_t\sim p_t$ the points $X_t$ along a trajectory \emph{should} have. At this point, this is just what we ``wish'' to be the case. But how can we find a vector field such that the trajectories $X_t$ follow the probability path? Flow matching explicitly constructs such a vector field - the ``marginal vector field'' - which we explain in this section.
+
+For every data point $z\in \mathbb{R}^d$, let $\uref_t(\cdot|z)$ denote a \themebf{conditional vector field}. This can be any vector field such that corresponding ODE yields the conditional probability path $p_t(\cdot|z)$, i.e. such that it holds
+\begin{align}
+\label{eq:cond_ref_ode_conds}
+X_0&\sim\pinit,\quad \frac{\dd}{\dd t}X_t =\uref_t(X_t|z)\quad \Rightarrow \quad X_t\sim p_t(\cdot|z)\quad (0\leq t\leq 1).
+\end{align}
+We can often find a conditional vector field $\uref_t(\cdot|z)$  analytically by hand (i.e. by just doing some algebra ourselves). We illustrate this by deriving a conditional vector field $u_t(x|z)$ for our running example of a Gaussian probability path in Example \ref{example:cond_vf_Gaussian_prob_path}.
+
+At first sight, a conditional vector field seems useless because all endpoints of the ODE $X_1$ will collapse to $X_1=z$, i.e. we are just re-generating known data points $z$. However, the conditional vector field serves as a building block for a vector field that generates actual samples from $\pdata$:
+\begin{theorem}[Marginalization trick]
+\label{thm:marginalization_trick}
+Let $\uref_t(x|z)$ be a conditional vector field (\cref{eq:cond_ref_ode_conds}). Then the \themebf{marginal vector field} $\uref_t(x)$ defined as
+\begin{align}
+    \label{eq:marginal_vector_field}
+    \uref_t(x) = \int \uref_t(x|z)\frac{p_t(x|z)\pdata(z)}{p_t(x)}\dd z,
+\end{align}
+follows the marginal probability path, i.e. 
+\begin{align}
+\label{eq:marginal_ode_follows_marginal_path}
+    X_0&\sim\pinit,\quad \frac{\dd}{\dd t}X_t =\uref_t(X_t)\quad \Rightarrow \quad X_t\sim p_t\quad (0\leq t\leq 1).
+\end{align}
+\textbf{In particular, $X_1\sim \pdata$ for this ODE, so that we might say "$\uref_t$ converts noise $\pinit$ into data $\pdata$"}.
+\end{theorem}
+
+
+% The marginalization trick from \cref{thm:marginalization_trick} then allows us to construct the marginal vector field from that. All that is left to do is to learn the marginal vector field, which is what flow matching does - 
+
+
+% while the marginal vector field $\uref_t(\cdot)$ is generally intractable, we can often find a conditional vector field $\uref_t(\cdot|z)$ satisfying \cref{eq:cond_ref_ode_conds} analytically by hand (i.e. by just doing some algebra ourselves). The marginalization trick from \cref{thm:marginalization_trick} then allows us to relate the conditional and marginal vector fields. As it turns out, one may therefore substitute the conditional vector field $\uref_t(\cdot | z)$ in place of the marginal vector field $\uref_t(\cdot)$. We will make this intuition precise in the next section, when we discuss \themebf{flow matching}. 
+\begin{figure}[t!]
+\centering
+   \begin{subfigure}[b]{\textwidth}
+   \centering
+   \includegraphics[width=\textwidth]{figures/conditional_ode.png}
+\end{subfigure}
+\begin{subfigure}[b]{\textwidth}
+    \centering
+   \includegraphics[width=\textwidth]{figures/marginal_ode.png}
+\end{subfigure}
+\caption{\label{fig:cond_marginal_path_simulation}Illustration of \cref{thm:marginalization_trick}. Simulating a  probability path with ODEs. Data distribution $\pdata$ in blue background. Gaussian $\pinit$ in red background. Top row: Conditional probability path. Left: Ground truth samples from conditional path $p_t(\cdot|z)$. Middle: ODE samples over time. Right: Trajectories by simulating ODE with $\uref_t(x|z)$ in \cref{eq:conditional_gaussian_vf}. Bottom row: Simulating a marginal probability path. Left: Ground truth samples from $p_t$. Middle: ODE samples over time. Right: Trajectories by simulating ODE with marginal vector field $\uflow_t(x)$. As one can see, the conditional vector field follows the conditional probability path and the marginal vector field follows the marginal probability path.}
+\end{figure}
+\begin{examplebox}
+[Target ODE for Gaussian probability paths]
+\label{example:cond_vf_Gaussian_prob_path}
+As before, let $p_t(\cdot|\dap) = \mathcal{N}(\alpha_t \dap,\beta_t^2 I_d)$ for noise schedulers $\alpha_t,\beta_t$ (see \cref{eq:gaussian_conditional_probability_paths}). Let $\dot{\alpha}_t=\partial_t\alpha_t$ and $\dot{\beta}_t=\partial_t\beta_t$ denote respective time derivatives of $\alpha_t$ and $\beta_t$. Here, we want to show that the \themebf{conditional Gaussian vector field} given by
+\begin{align}
+\label{eq:conditional_gaussian_vf}
+    \uref_t(x|z) = \left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z+\frac{\dot{\beta}_t}{\beta_t}x
+\end{align}
+is a valid conditional vector field model in the sense of \cref{thm:marginalization_trick}: its ODE trajectories $X_t$ satisfy $X_t\sim p_t(\cdot|z)=\mathcal{N}(\alpha_t z,\beta_t^2I_d)$ if $X_0\sim \mathcal{N}(0,I_d)$. In \cref{fig:cond_marginal_path_simulation}, we confirm this visually by comparing samples from the conditional probability path (ground truth) to samples from simulated ODE trajectories of this flow. As you can see, the distribution match. We will now prove this.
+
+\begin{proof}
+Let us construct a conditional flow model $\psiref_t(x|z)$ first by defining
+\begin{align}
+    \label{eq:cond_flow_gaussian}
+    \psiref_t(x|z) = \alpha_t z + \beta_t x.
+\end{align}
+If $X_t$ is the ODE trajectory of $\psiref_t(\cdot|z)$ with $X_0\sim\pinit = \mathcal{N}(0,I_d)$, then by definition
+\begin{align*}
+    X_t = \psiref_t(X_0|z) = \alpha_t z + \beta_t X_0 \sim \mathcal{N}(\alpha_t z,\beta^2 I_d) = p_t(\cdot|z).
+\end{align*}
+We conclude that the trajectories are distributed like the conditional probability path (i.e, \cref{eq:cond_ref_ode_conds} is fulfilled). It remains to extract the vector field $\uref_t(x|z)$ from $\psiref_t(x|z)$. By the definition of a flow (\cref{e:flow_flow}), it holds
+\begin{align*}
+      \frac{\dd}{\dd t}\psiref_{t}(x|z) &= \uref_t(\psiref_t(x|z)|z)\quad \text{ for all }x,z\in\mathbb{R}^d\\
+    \overset{(i)}{\Leftrightarrow} \quad \dot{\alpha}_tz+\dot{\beta}_tx &= \uref_t(\alpha_tz+\beta_t x|z)\quad \text{ for all }x,z\in\mathbb{R}^d\\
+    \overset{(ii)}{\Leftrightarrow} \quad \dot{\alpha}_tz+\dot{\beta}_t\left(\frac{x-\alpha_tz}{\beta_t}\right)&= \uref_t(x|z)\quad \text{ for all }x,z\in\mathbb{R}^d\\
+    \overset{(iii)}{\Leftrightarrow} \quad\left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z+\frac{\dot{\beta}_t}{\beta_t}x &= \uref_t(x|z)\quad \text{ for all }x,z\in\mathbb{R}^d
+\end{align*}
+where in $(i)$ we used the definition of $\psiref_t(x|z)$ (\cref{eq:cond_flow_gaussian}), in $(ii)$ we reparameterized $x\rightarrow (x-\alpha_t z)/\beta_t$, and in $(iii)$ we just did some algebra. Note that the last equation is the conditional Gaussian vector field as we defined in \cref{eq:conditional_gaussian_vf}. This proves the statement.\footnote{One can also double check this by plugging it into the continuity equation introduced later in this section.}
+\end{proof}
+\end{examplebox}
+
+See \cref{fig:cond_marginal_path_simulation} for an illustration of  \cref{thm:marginalization_trick}. Let's gain some intuition for the marginal vector field. \textbf{Bayes' rule} from statistics says that the following term describes a posterior distribution
+\begin{align*}
+\frac{p_t(x|z)\pdata(z)}{p_t(x)} = \text{"posterior over data points }z\text{ given noisy data }x\text{"}
+\end{align*}
+where $\pdata(z)$ is the prior distribution. The marginal vector field then is simply a average: for every \emph{possible} data point $z$ it takes the velocity $u_t(x|z)$ - i.e. the direction that would bring us to $z$ - and then weighs this velocity by how much we believe that $x$ comes from $z$. Averaging over all data points, we obtain the marginal vector field. 
+
+The remainder of this section will make this intuition rigorous and prove \cref{thm:marginalization_trick}. As the main mathematical tool, we will use the \themebf{continuity equation}, a fundamental equation in mathematics and physics. Define the \themebf{divergence} operator $\divv$ as
+\begin{align}
+\label{eq:divergence_laplacian_definition}
+    \divv(v_t)(x)=&\sum\limits_{i=1}^{d}\frac{\partial}{\partial x_i}v_t^i(x)
+\end{align}
+where $v_t^i$ is the $i$-th coordinate of $v_t$.
+\begin{theorem}[Continuity Equation]
+\label{thm:continuity_equation}
+Let us consider an flow model with vector field $\uref_t$ with $X_0\sim\pinit=p_0$. Then $X_t\sim p_t$ for all $0\leq t\leq 1$ if and only if
+\begin{align}
+\label{e:continuity_equation}
+\partial_t p_t(x)=-\divv (p_t\uref_t)(x)\quad \text{ for all }x\in\R^d, 0\leq t\leq 1,
+\end{align}
+where $\partial_tp_t(x)= \frac{\dd}{\dd t}p_t(x)$ denotes the time-derivative of $p_t(x)$. Equation \ref{e:continuity_equation} is known as the \themebf{continuity equation}.
+\end{theorem}
+For the mathematically-inclined reader, we present a self-contained proof of the Continuity Equation in \cref{subsec:proof_fokker_planck}. Before we move on, let us try and understand intuitively the continuity equation. The left-hand side $\partial_tp_t(x)$ describes how much the probability $p_t(x)$ at $x$ changes over time. Intuitively, the change should correspond to the net inflow of probability mass. For a flow model, a particle $X_t$ follows along the vector field $\uref_t$. As you might recall from physics, the divergence measures a sort of net outflow from the vector field. Therefore, the negative divergence measures the net inflow. Scaling this by the total probability mass currently residing at $x$, we get that the net $-\divv (p_tu_t)$ measures the total inflow of probability mass. Since probability mass is conserved (always integrates to 1), the left-hand and right-hand side of the equation should be the same! We now proceed with a proof of the marginalization trick from \cref{thm:marginalization_trick}.
+\begin{proof}[Proof of \cref{thm:marginalization_trick}.]
+By \cref{thm:continuity_equation}, we have to show that the marginal vector field $\uref_t$, as defined as in \cref{eq:marginal_vector_field}, satisfies the continuity equation. We can do this by direct calculation:
+\begin{align*}
+\partial_t p_t(x) \overset{(i)}
+{=} \partial_t\int p_t(x|\dap) \pdata (z) \dd z
+&= \int \partial_t p_t(x|\dap) \pdata (z) \dd z\\
+&\overset{(ii)}{=} \int -\divv (p_t(\cdot|z)\uref_t(\cdot|z))(x) \pdata (z) \dd z\\
+&\overset{(iii)}{=} -\divv \left(\int p_t(x|z) \uref_t(x|z)\pdata(z) \dd z\right)\\
+&\overset{(iv)}{=} -\divv \left(p_t(x)\int \uref_t(x|z) \frac{p_t(x|z)\pdata(z)}{p_t(x)}\dd z\right)(x)\\
+&\overset{(v)}{=} -\divv \left(p_t\uref_t\right)(x),
+\end{align*}
+where in $(i)$ we used the definition of $p_t(x)$ in \cref{eq:marginal_prob_path}, in $(ii)$ we used the continuity equation for the conditional probability path $p_t(\cdot|z)$, in $(iii)$ we swapped the integral and divergence operator using \cref{eq:divergence_laplacian_definition}, in $(iv)$ we multiplied and divided by $p_t(x)$, and in $(v)$ we used \cref{eq:marginal_vector_field}. The beginning and end of the above chain of equations show that the continuity equation is fulfilled for $\uref_t$. By \cref{thm:continuity_equation}, this is enough to imply \cref{eq:marginal_ode_follows_marginal_path}, and we are done.
+\end{proof}
+
+
+\subsection{Learning the Marginal Vector Field}
+
+Now, we are ready to describe the training algorithm. The goal of flow matching is to train the neural network $u_t^\theta$ such that it equals the marginal vector field $\uref_t$. If this holds, we know that the endpoints $X_1\sim \pdata$ have the desired distribution by \cref{thm:marginalization_trick}. In the following, we denote by $\text{Unif}=\text{Unif}_{[0,1]}$ the uniform distribution on the interval $[0,1]$, and by $\mathbb{E}$ the expected value of a random variable. An intuitive way of obtaining $u_t^\theta\approx \uref_t$ is to use a mean-squared error, i.e. to use the \themebf{flow matching loss} defined as
+\label{subsec:training_algorithm}
+\begin{align}
+    \label{eq:marginal_loss_function}
+\Lmarg(\theta)&=\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[\|u_t^\theta(x) - \uref_t(x)\|^2]\\&\overset{(i)}{=} \mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[\|u_t^\theta(x) - \uref_t(x)\|^2],
+\end{align}
+where $p_t(x)=\int p_t(x|z)\pdata(z) \dd z$ is the marginal probability path and in $(i)$ we used the sampling procedure given by \cref{eq:marginal_prob_path}. Intuitively, this loss says: First, draw a random time $t \in [0,1]$. Second, draw a random point $z$ from our data set, sample from $p_t(\cdot|z)$ (e.g., by adding some noise), and compute $u_t^\theta(x)$. Finally, compute the mean-squared error between the output of our neural network and the marginal vector field $\uref_t(x)$. Unfortunately, we are \textit{not} done here. While we do know the formula for $\uref_t$ by \cref{thm:marginalization_trick}, we cannot compute it efficiently as the integral is intractable. Instead, we will exploit the fact that the \themebf{conditional} velocity field $\uref_t(x|z)$ is tractable. % We could try to approximate the above integral by screening over the whole dataset. However, even for a dataset of 1 million images (which is very small in modern days), we would need to loop over 1 million images every time we evaluate $\uref_t(x)$ - an extremely computationally expensive approach. However, it turns out that we can solve this. 
+To do so, let us define the \themebf{conditional flow matching loss} 
+\begin{align}
+\label{eq:cfm}
+\Lcond(\theta) =     \mathbb{E}_{t\sim \Unif, z\sim \pdata, x\sim p_t(\cdot|\dap)}[\|u_t^\theta(x) - \uref_t(x|\dap)\|^2].
+\end{align}
+Note the difference to     \cref{eq:marginal_loss_function}: we use the conditional vector field $\uref_t(x|z)$ instead of the marginal vector $\uref_t(x)$. As we have an analytical formula for $\uref_t(x|z)$, we can minimize the above loss easily. But wait, what sense does it make to regress against the conditional vector field if it's the marginal vector field we care about? As it turns out, by \themeit{explicitly} regressing against the tractable, conditional vector field, we are \themeit{implicitly} regressing against the intractable, marginal vector field. The next result makes this intuition precise.
+
+\begin{theorem}
+\label{thm:fm_loss} 
+The marginal flow matching loss equals the conditional flow matching loss up to a constant. That is,
+\begin{align*}
+\Lmarg(\theta) = \Lcond(\theta) + C,
+\end{align*}
+where $C$ is independent of $\theta$. Therefore, their gradients coincide:
+\begin{align*}
+\nabla_\theta \Lmarg(\theta) = \nabla_\theta \Lcond(\theta).
+\end{align*}
+Hence, minimizing $\Lcond(\theta)$ with e.g., stochastic gradient descent (SGD) is equivalent to minimizing $\Lmarg(\theta)$ in the same fashion. In particular, \textbf{for the minimizer $\theta^*$ of $\Lcond(\theta)$, it will hold that $u_t^{\theta^*}=\uref_t$, i.e. the neural network will equal the marginal vector field} (assuming an infinitely expressive parameterization). 
+\end{theorem}
+\begin{proof}[Direct Proof]
+The proof works by expanding the mean-squared error into three components and removing constants:
+\begin{align*}
+    \Lmarg(\theta)&\overset{(i)}{=}\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[\|u_t^\theta(x) - \uref_t(x)\|^2]\\
+    &\overset{(ii)}{=}\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[\|u_t^\theta(x)\|^2 - 2u_t^\theta(x)^T\uref_t(x) + \|\uref_t(x)\|^2]\\
+    &\overset{(iii)}{=}\mathbb{E}_{t\sim\text{Unif},x\sim p_t}\left[\|u_t^\theta(x)\|^2\right] - 2\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[u_t^\theta(x)^T\uref_t(x)] + \underbrace{\mathbb{E}_{t\sim\text{Unif}_{[0,1]}, x\sim p_t}[\|\uref_t(x)\|^2]}_{=:C_1}\\
+    &\overset{(iv)}{=}\mathbb{E}_{t\sim\text{Unif},z\sim\pdata, x\sim p_t(\cdot|z)}[\|u_t^\theta(x)\|^2] - 2\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[u_t^\theta(x)^T\uref_t(x)] + C_1
+\end{align*}
+where $(i)$ holds by definition, in $(ii)$ we used the formula $\|a-b\|^2=\|a\|^2-2a^Tb+\|b\|^2$, in $(iii)$ we define a constant $C_1$ and in $(iv)$ we used the sampling procedure of $p_t$ given by \cref{eq:marginal_prob_path}. Let us reexpress the second summand:
+\begin{align*}
+\mathbb{E}_{t\sim\text{Unif},x\sim p_t}[u_t^\theta(x)^T\uref_t(x)]&\overset{(i)}{=}\int\limits_{0}^{1}\int p_t(x)u_t^\theta(x)^T\uref_t(x)\,\dd x\, \dd t\\
+&\overset{(ii)}{=}\int\limits_{0}^{1}\int p_t(x)u_t^\theta(x)^T\left[\int \uref_t(x|z)\frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z\right]\dd x\, \dd t\\
+&\overset{(iii)}{=}\int\limits_{0}^{1}\int\int u_t^\theta(x)^T\uref_t(x|z) p_t(x|z)\pdata(z)\,\dd z\,\dd x\, \dd t\\
+&\overset{(iv)}{=}\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[u_t^\theta(x)^T\uref_t(x|z)]
+\end{align*}
+where in $(i)$ we expressed the expected value as an integral, in $(ii)$ we use \cref{eq:marginal_vector_field}, in $(iii)$ we use the fact that integrals are linear, in $(iv)$ we express the integral as an expected value. Note that this was really the crucial step of the proof: The beginning of the equality used the marginal vector field $\uref_t(x)$, while the end uses the conditional vector field $\uref_t(x|z)$. We plug is into the equation for $\Lmarg$ to get:
+\begin{align*}
+\Lmarg(\theta)&\overset{(i)}{=}\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[\|u_t^\theta(x)\|^2]-2\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[u_t^\theta(x)^T\uref_t(x|z)] +C_1\\
+&\overset{(ii)}{=}\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[\|u_t^\theta(x)\|^2-2u_t^\theta(x)^T\uref_t(x|z)+\|\uref_t(x|z)\|^2-\|\uref_t(x|z)\|^2] +C_1\\
+&\overset{(iii)}{=}\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[\|u_t^\theta(x)-\uref_t(x|z)\|^2]+\underbrace{\mathbb{E}_{t\sim\text{Unif},z\sim \pdata, x\sim p_t(\cdot|z)}[-\|\uref_t(x|z)\|^2]}_{C_2} +C_1\\
+&\overset{(iv)}{=}\Lcond(\theta) + \underbrace{C_2+C_1}_{=:C}
+\end{align*}
+where in $(i)$ we plugged in the derived equation, in $(ii)$ we added and subtracted the same value,  in $(iii)$ we used the formula $\|a-b\|^2=\|a\|^2-2a^Tb+\|b\|^2$ again, and in $(iv)$ we defined a constant in $\theta$. This finishes the proof.
+\end{proof}
+\begin{algorithm}[ht]
+\caption{Flow Matching Training Procedure (for Gaussian CondOT path $p_t(x|z)=\mathcal{N}(tz,(1-t)^2)$)}
+\label{alg:training_fm_basic}
+\begin{algorithmic}[1]
+\REQUIRE A dataset of samples $z\sim \pdata$, neural network $u_t^\theta$
+\FOR{each mini-batch of data}
+    \STATE Sample a data example $\dap$ from the dataset.
+    \STATE Sample a random time $t \sim \text{Unif}_{[0,1]}$.
+    \STATE Sample noise $\epsilon\sim\mathcal{N}(0,I_d)$
+    \STATE Set 
+    \begin{align*}
+        x&=t z + (1-t)\epsilon \quad &(\text{General case: }x\sim p_t(\cdot\mid z))
+    \end{align*}
+    
+    %\IF{Flow matching}
+    \STATE Compute loss
+    \begin{align*}
+        \mathcal{L}(\theta) =& \|u_t^\theta(x)-(z-\epsilon)\|^2 \quad &(\text{General case: }=\|u_t^\theta(x)-\uref_t(x|z)\|^2)
+    \end{align*}
+    %\ENDIF
+    % \IF{Score matching}
+    % \STATE
+    % \begin{align*}
+    %     \mathcal{L}(\theta) =& \|s_t^\theta(x_t)+\frac{\epsilon}{\beta_t}\|^2 \quad &(\text{General case: }=\|s_t^\theta(x_t)+\nabla\log p_t(x_t|z)\|^2)
+    % \end{align*}
+    % \ENDIF
+    \STATE Update $\theta \gets \text{grad\_update}(\mathcal{L}(\theta))$.
+    % \STATE Update the model parameters $\theta$ via gradient descent on $\mathcal{L}(\theta)$.
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+Therefore, \textbf{flow matching training consists of minimizing the conditional flow matching loss.} The training procedure is summarized in \cref{alg:training_fm_basic} and visualized in \cref{fig:fm_illustration_checkerboard}. Note that there are several striking features about this algorithm: First, we never actually simulate any ODE during training. People call this feature of the algorithm \textbf{simulation-free}. This makes training extremely cheap as you don't have to roll out trajectories of the ODE during training (which takes a lot of steps). Second, the training is a simple regression objective - we are just regressing against $\uref_t(x|z)$. So it is not too different from supervised learning after all. Finally, the algorithm is extremely simple - it is hard to think of a much simpler training objective. All of this makes flow matching an extremely appealing method for large-scale machine learning models. Once $u_t^{\theta}$ has been trained, we may simulate the flow model
+\begin{align}
+    \dd X_t = u_t^\theta(X_t)\, \dd t,\quad\quad X_0\sim\pinit
+\end{align}
+via e.g., \cref{alg:sampling_flow_model} to obtain samples $X_1\sim \pdata$. This whole pipeline is called \themebf{flow matching} in the literature \citep{lipman2022flow, liu2022flow, albergo2023stochastic, lipman2024flow}.
+Let us now instantiate the conditional flow matching loss for Gaussian probability paths:
+\begin{examplebox}[Flow Matching for Gaussian Conditional Probability Paths]
+Let us return to the example of Gaussian probability paths $p_t(\cdot|z)=\mathcal{N}(\alpha_t z; \beta_t^2 I_d)$, where we may sample from the conditional path via
+\begin{align}
+\label{eq:sampling_procedure_gaussian_path_restated_for_fm}
+    \epsilon\sim\mathcal{N}(0,I_d)\quad 
+    \Rightarrow\quad x_t = \alpha_t z + \beta_t \epsilon \sim \mathcal{N}(\alpha_tz,\beta_t^2I_d)=p_t(\cdot|z).
+\end{align}
+As we derived in \cref{eq:conditional_gaussian_vf}, the conditional vector field $\uref_t(x|z)$ is given by
+\begin{align}
+\label{e:marginal_vf_cond_score}
+    \uref_t(x|z) =& \left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z+\frac{\dot{\beta}_t}{\beta_t}x,
+\end{align}
+where $\dot{\alpha}_t=\partial_t\alpha_t$ and $\dot{\beta}_t=\partial_t\beta_t$ are the respective time derivatives. Plugging in this formula, the conditional flow matching loss reads
+\begin{align}
+\Lcond(\theta) &= \mathbb{E}_{t\sim \text{Unif},z\sim \pdata, x\sim \mathcal{N}(\alpha_tz,\beta_t^2I_d)}[\lVert u_t^\theta(x)-\left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z-\frac{\dot{\beta}_t}{\beta_t}x\rVert^2]\\&\overset{(i)}{=}\mathbb{E}_{t\sim\Unif,z\sim \pdata, \epsilon\sim \mathcal{N}(0,I_d)}[\|u_t^\theta(\alpha_tz+\beta_t\epsilon)-(\dot{\alpha}_tz+\dot{\beta}_t\epsilon)\|^2]
+\end{align}
+where in $(i)$ we plugged in \cref{eq:sampling_procedure_gaussian_path_restated_for_fm} and replaced $x$ by $\alpha_tz+\beta_t\epsilon$. Note the simplicity of $\Lcond$ : We sample a data point $z$, sample some noise $\epsilon$ and then we take a mean squared error. Let us make this even more concrete for the special case of $\alpha_t=t$, and $\beta_t=1-t$. The corresponding probability $p_t(x|z)=\mathcal{N}(tz,(1-t)^2)$ is sometimes referred to as the (Gaussian) \themebf{CondOT probability path}. Then we have $\dot{\alpha}_t=1,\dot{\beta}_t=-1$, so that
+\begin{align*}
+        \mathcal{L}_{\text{cfm}}(\theta)=&\mathbb{E}_{t\sim\Unif,z\sim \pdata, \epsilon\sim \mathcal{N}(0,I_d)}[\|u_t^\theta(tz+(1-t)\epsilon)-(z-\epsilon)\|^2]
+\end{align*}
+Many famous state-of-the-art models have been trained using this simple yet effective procedure, e.g. \themeit{Stable Diffusion 3}, Meta's \themeit{Movie Gen Video}, and probably many more proprietary models. In \cref{fig:fm_illustration_checkerboard}, we visualize it in a simple example and in \cref{alg:training_fm_basic} we summarize the training procedure.
+\end{examplebox}
+
+\begin{figure}[!t]
+    \centering
+    \begin{tabular}{ccc}
+         \includegraphics[width=\textwidth]{figures/conditional_marginal_path.png} &
+         % \includegraphics[width=0.22\textwidth]{assets/flow_velocity/flow_v_5.png} &
+         % \includegraphics[width=0.3\textwidth]{fm_guide_assets/flow_10.png} &
+         % % \includegraphics[width=0.22\textwidth]{assets/flow_velocity/flow_v_14.png} &
+         % \includegraphics[width=0.3\textwidth]{fm_guide_assets/flow_16.png} 
+    \end{tabular}
+    \caption{\label{fig:fm_illustration_checkerboard}Illustration of \cref{thm:fm_loss} with a Gaussian CondOT probability path: simulating an ODE from a trained flow matching model. The data distribution is the chess board pattern (top right). Top row: Histogram from ground truth marginal probability path $p_t(x)$. Bottom row: Histogram of samples from flow matching model. As one can see, the top row and bottom row match after training (up to training error). The model was trained using \cref{alg:training_fm_basic}.}
+\end{figure}
+
+% When I first saw \cref{thm:fm_loss}, I found it a big magical: Without seeing $\uref_t(x)$ explicitly ever, we can approximate it implicitly with a neural network. Therefore, \cref{thm:fm_loss} gives us a powerful of training our ODE generative model by minimizing $\Lcond(\theta)$. All we have to do is minimize a simple mean squared error. This is scalable to very large datasets in high dimensions and can be implemented in a few lines of code. When tracking the training, you should keep in mind that \textbf{the absolute value of the loss is meaningless} (you will never achieve zero loss because $C<0$). This makes it sometimes a little tricky to realize when the training is converged.
+
+
+Let us summarize the results of this section.
+\begin{summarybox}[Flow Matching]
+\textbf{Flow matching training consists of learning the marginal vector field $\uref_t$.} To construct it, we choose a \themebf{conditional probability path} $p_t(x|\dap)$ that fulfils $p_0(\cdot|z)=\pinit$, $p_1(\cdot|z)=\delta_{z}$. Next, we find a \themebf{conditional vector field} $\uref_t(x|z)$ such that its corresponding flow $\psiref_t(x|z)$ fulfills
+\begin{align*}
+    X_0\sim \pinit \quad \Rightarrow \quad X_t = \psiref_t(X_0|z) \sim p_t(\cdot|z),
+\end{align*}
+or, equivalently, that $\uref_t$ satisfies the continuity equation.  Then the \themebf{marginal vector field} defined by
+\begin{align}
+    \label{eq:marginal_vector_field_restated}
+    \uref_t(x) = \int \uref_t(x|z)\frac{p_t(x|z)\pdata(z)}{p_t(x)}\dd z,
+\end{align}
+follows the marginal probability path, i.e.,
+\begin{align}
+    \label{eq:marginal_ode_follows_marginal_path_restated}
+    X_0&\sim\pinit,\quad \dd X_t =\uref_t(X_t)\dd t\Rightarrow X_t\sim p_t\quad (0\leq t\leq 1).
+\end{align}
+In particular, $X_1\sim \pdata$ for this ODE, so that $\uref_t$ "converts noise into data", as desired. To learn it, we minimize the \themebf{conditional flow matching loss}
+\begin{align}
+\Lcond(\theta) =     \mathbb{E}_{t\sim \Unif, z\sim \pdata, x\sim p_t(\cdot|\dap)}[\|u_t^\theta(x) - \uref_t(x|\dap)\|^2].
+\end{align}
+
+The most widely used example is the \themebf{Gaussian probability path}. For this case, the formulas become:
+\begin{align}
+p_t(x|z) =& \mathcal{N}(x;\alpha_t z,\beta_t^2 I_d)\\
+\uflow_t(x|z)=&\left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z+\frac{\dot{\beta}_t}{\beta_t}x\\
+\Lcond(\theta) =&\mathbb{E}_{t\sim\Unif,z\sim \pdata, \epsilon\sim \mathcal{N}(0,I_d)}[\|u_t^\theta(\alpha_tz+\beta_t\epsilon)-(\dot{\alpha}_tz+\dot{\beta}_t\epsilon)\|^2]
+\end{align}
+for \themebf{noise schedulers} $\alpha_t,\beta_t\in\mathbb{R}$, i.e. continuously differentiable, monotonic functions that we choose such that $\alpha_0=\beta_1=0$ $\alpha_1=\beta_0=1$ (e.g. $\alpha_t=t,\beta_t=1-t$).
+\end{summarybox}

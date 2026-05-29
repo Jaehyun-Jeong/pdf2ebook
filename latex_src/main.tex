@@ -1,0 +1,89 @@
+\documentclass[svgnames,dvipsnames]{article}
+\usepackage{notes}
+\usepackage{subfiles}
+\usepackage{wrapfig}
+\usepackage[natbib=true]{biblatex}
+\addbibresource{source.bib}
+\input{math_commands}
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\newcommand{\algcomment}[1]{\hfill\makebox[0pt][r]{\footnotesize(#1)}}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{epigraph}
+\setlength{\epigraphwidth}{.4\textwidth}
+
+\setcounter{tocdepth}{2}
+\date{}
+\begin{document}
+
+%\vspace{1em} % Adjust vertical space as needed
+ 
+%\begin{center}
+%{MIT Class 6.S184: \textit{Generative AI With Stochastic Differential Equations}, 2026}
+%\end{center}
+\vspace{0.0em}
+
+\hrule
+\vspace{0.7em}
+\begin{center}
+{\Large \bfseries \sffamily An Introduction to Flow Matching and Diffusion Models} \vspace{0.7em}\\
+{\normalsize \sffamily 
+Peter Holderrieth and Ezra Erives\\
+\vspace{0.7em}
+Website: \url{https://diffusion.csail.mit.edu/}}
+\end{center}
+
+\vspace{0.6em}
+
+\hrule
+
+\doparttoc
+
+\begin{adjustwidth}{1.0cm}{1.0cm}
+\tableofcontents
+\end{adjustwidth}
+
+\vspace{1.5em}
+\hrule
+
+\newpage
+\subfile{subfiles/part_01.tex}
+\newpage
+\subfile{subfiles/part_02.tex}
+\newpage
+\subfile{subfiles/part_03.tex}
+\newpage
+\subfile{subfiles/part_04}
+\newpage
+\subfile{subfiles/part_04_a_guidance}
+\newpage
+\subfile{subfiles/part_05_polished}
+% \newpage
+% \subfile{subfiles/part_06_distillation_empty}
+\newpage
+\subfile{subfiles/part_07_discrete_diffusion}
+% \newpage 
+% \subfile{subfiles/acknowledgements.tex}
+\printbibliography[
+  heading=bibnumbered,
+  title={References}
+]
+
+\appendix
+\newpage
+\subfile{subfiles/appendix_reminder_prob_theory.tex}
+\newpage
+\subfile{subfiles/appendix_fokker_planck_proof.tex}
+\subfile{subfiles/appendix_proof_existence_and_uniqueness_ctmcs.tex}
+
+
+% \newpage
+% \subfile{subfiles/appendix_neural_odes}
+\newpage
+\subfile{subfiles/appendix_vaes_as_generative_models}
+\subfile{subfiles/appendix_guide_to_diffusion_literature.tex}
+% \subfile{subfiles/appendix_neural_odes.tex}
+\end{document}

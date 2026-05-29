@@ -1,0 +1,85 @@
+\section{A Proof of the Fokker-Planck equation}
+\label{subsec:proof_fokker_planck}
+In this section, we give here a self-contained proof of the Fokker-Planck equation which includes the continuity equation as a special case (\cref{thm:continuity_equation}). We stress that \textbf{this section is not necessary to understand the remainder of this document} and is mathematically more advanced. If you desire to understand where the Fokker-Planck equation comes from, then this section is for you.\\
+
+\begin{theorem}[Fokker-Planck Equation]
+\label{thm:fokker_planck_restated}
+Let $p_t$ be a probability path with $p_0=\pinit$ and let us consider the SDE
+\begin{align*}
+    X_0\sim \pinit, \quad \dd X_t = u_t(X_t)\dd t + \sigma_t\dd W_t.
+\end{align*}
+Then $X_t$ has distribution $p_t$ for all $0\leq t\leq 1$ if and only if the \themebf{Fokker-Planck equation} holds:
+    \begin{align}
+    \label{e:fokker_planck_restated}
+    \partial_t p_t(x) = -\divv (p_t u_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t (x)\quad \text{ for all }x\in\R^d, 0\leq t\leq 1,
+    \end{align}     
+\end{theorem}
+
+We start by showing that the Fokker-Planck is a necessary condition, i.e. if $X_t\sim p_t$, then the Fokker-Planck equation is fulfilled. The trick for the proof is to use \themebf{test functions} $f$, i.e. functions $f:\R^d\to\R$ that are infinitely differentiable ("smooth") and are only non-zero within a bounded domain (compact support). We use the fact that for arbitrary integrable functions $g_1,g_2:\mathbb{R}^d\to\mathbb{R}$ it holds that
+\begin{align}
+\label{eq:test_function_usecase}
+g_1(x) = g_2(x)\text{ for all }x\in\mathbb{R}^d\quad \Leftrightarrow \quad \int f(x) g_1(x)\dd x = \int f(x) g_2(x)\dd x\text{ for all test functions }f
+\end{align}
+In other words, we can express the pointwise equality as equality of taking integrals. The useful thing about test functions is that they are smooth, i.e. we can take gradients and higher-order derivatives. In particular, we can use \themebf{integration by parts} for arbitrary test functions $f_1,f_2$:
+\begin{align}
+    \int f_1(x) \frac{\partial}{\partial x_i}f_2(x)\dd x = - \int f_2(x) \frac{\partial}{\partial x_i}f_1(x)\dd x
+\end{align}
+under the condition that $f_1,f_2$ and their product $f_1\cdot f_2$ is integrable. By using this together with the definition of the divergence and Laplacian (see \cref{eq:divergence_laplacian_definition}), we get the identities:
+\begin{align}
+\label{eq:integration_by_parts_divergence}
+    \int \nabla f_1^T(x) f_2(x)\dd x =& -\int f_1(x)\divv(f_2)(x)\dd x \quad (f_1:\R^d\to\R,f_2:\R^d\to\R^d)\\
+\label{eq:integration_by_parts_laplacian}
+    \int f_1(x) \Delta f_2(x) \dd x =& \int f_2(x) \Delta f_1(x) \dd x\quad (f_1:\R^d\to\R,f_2:\R^d\to\R)
+\end{align}
+
+
+
+Now let's proceed to the proof. We use the stochastic update of SDE trajectories as in \cref{e:infinitesimal_updates_sdes}:
+\begin{align}
+    X_{t+h} =& X_{t}+hu_t(X_t) + \sigma_t(W_{t+h}-W_{t})+hR_t(h)\\
+    \label{eq:approximate_condition}
+    \approx &X_{t}+hu_t(X_t) + \sigma_t(W_{t+h}-W_{t})
+\end{align}
+where for now we simply ignore the error term $R_t(h)$ for readability as we will take $h\to 0$ anyway. We can then make the following calculation:
+\begin{align*}
+f(X_{t+h})-f(X_t)\overset{\eqref{eq:approximate_condition}}{=}&f(X_{t}+hu_t(X_t) + \sigma_t(W_{t+h}-W_{t}))-f(X_t)\\
+\overset{(i)}{=}&\nabla f(X_t)^T\left(hu_t(X_t) + \sigma_t(W_{t+h}-W_{t}))\right)\\&+\frac{1}{2}\left(hu_t(X_t) + \sigma_t(W_{t+h}-W_{t}))\right)^T\nabla^2 f(X_t)\left(hu_t(X_t) + \sigma_t(W_{t+h}-W_{t}))\right)\\
+\overset{(ii)}{=}&h\nabla f(X_t)^Tu_t(X_t) + \sigma_t\nabla f(X_t)^T(W_{t+h}-W_{t})\\&+\frac{1}{2}h^2u_t(X_t)^T\nabla^2 f(X_t)u_t(X_t)+ h\sigma_tu_t(X_t)^T\nabla^2 f(X_t)(W_{t+h}-W_{t})+\\&+\frac{1}{2}\sigma_t^2(W_{t+h}-W_t)^T\nabla^2 f(X_t)(W_{t+h}-W_t)
+\end{align*}
+where in (i) we used a 2nd Taylor approximation of $f$ around $X_t$ and in (ii) we used the fact that the Hessian $\nabla^2 f$ is a symmetric matrix. Note that $\mathbb{E}[W_{t+h}-W_t|X_t]=0$ and $W_{t+h}-W_{t}|X_t\sim\mathcal{N}(0,hI_d)$. Therefore
+\begin{align*}
+    &\mathbb{E}[f(X_{t+h})-f(X_t)|X_t]\\
+=&h\nabla f(X_t)^Tu_t(X_t)+\frac{1}{2}h^2u_t(X_t)^T\nabla^2 f(X_t)u_t(X_t)+\frac{h}{2}\sigma_t^2\mathbb{E}_{\epsilon_t\sim\mathcal{N}(0,I_d)}[\epsilon_t^T\nabla^2 f(X_t)\epsilon_t]\\
+\overset{(i)}{=}&h\nabla f(X_t)^Tu_t(X_t)+\frac{1}{2}h^2u_t(X_t)^T\nabla^2 f(X_t)u_t(X_t)+\frac{h}{2}\sigma_t^2\text{trace}(\nabla^2 f(X_t))\\
+\overset{(ii)}{=}&h\nabla f(X_t)^Tu_t(X_t)+\frac{1}{2}h^2u_t(X_t)^T\nabla^2 f(X_t)u_t(X_t)+\frac{h}{2}\sigma_t^2\Delta f(X_t)
+\end{align*}
+where in $(i)$ we used the fact that $\mathbb{E}_{\epsilon_t\sim\mathcal{N}(0,I_d)}[\epsilon_t^T A\epsilon_t]=\text{trace}(A)$ and in $(ii)$ we used the definition of the Laplacian and the Hessian matrix. With this, we get that 
+\begin{align*}
+&\partial_t \mathbb{E}[f(X_t)]\\
+=&\lim\limits_{h\to 0}
+\frac{1}{h}\mathbb{E}[f(X_{t+h})-f(X_t)]\\
+=&\lim\limits_{h\to 0}
+\frac{1}{h}\mathbb{E}[\mathbb{E}[f(X_{t+h})-f(X_t)|X_t]]\\
+=&\mathbb{E}[\lim\limits_{h\to 0}\frac{1}{h}\left(
+h\nabla f(X_t)^Tu_t(X_t)+\frac{1}{2}h^2u_t(X_t)^T\nabla^2 f(X_t)u_t(X_t)+\frac{h}{2}\sigma_t^2\Delta f(X_t)
+\right)]\\
+=&\mathbb{E}[\nabla f(X_t)^Tu_t(X_t)+\frac{1}{2}\sigma_t^2\Delta f(X_t)]\\
+\overset{(i)}{=}&\int \nabla f(x)^Tu_t(x)p_t(x)\dd x+\int \frac{1}{2}\sigma_t^2\Delta f(x)p_t(x)\dd x\\
+\overset{(ii)}{=}&-\int f(x)\divv(u_t p_t)(x)\dd x+\int \frac{1}{2}\sigma_t^2 f(x)\Delta p_t(x)\dd x\\
+=&\int f(x)\left(-\divv(u_t p_t)(x)+\frac{1}{2}\sigma_t^2\Delta p_t(x)\right)\dd x
+\end{align*}
+where in (i) we used the assumption that $p_t$ as the distribution of $X_t$ and in (ii) we used \cref{eq:integration_by_parts_divergence} and \cref{eq:integration_by_parts_laplacian}. Note that to use this, we require integrability of the product $p_t(x)u_t(x)$, i.e. such that 
+\begin{align*}
+\int p_t(x)\|u_t(x)\|\dd x <\infty
+\end{align*}
+Note that this condition almost always holds in machine learning (bounded data and functions because of numerical precision limits). Therefore, it holds that
+\begin{align}
+\partial_t\mathbb{E}[f(X_t)] =& \int f(x)\left(-\divv (p_t u_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t (x)\right)\dd x\quad (\text{for all }f\text{ and }0\leq t\leq 1)\\
+\overset{(i)}{\Leftrightarrow}\quad \partial_t\int f(x) p_t(x)\dd x =& \int f(x)\left(-\divv (p_tu_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t (x)\right)\dd x\quad (\text{for all }f\text{ and }0\leq t\leq 1)\\
+\overset{(ii)}{\Leftrightarrow}\quad \int f(x)\partial_t p_t(x)\dd x =& \int f(x)\left(-\divv (p_t u_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t (x)\right)\dd x\quad (\text{for all }f\text{ and }0\leq t\leq 1)\\
+\overset{(iii)}{\Leftrightarrow}\quad \partial_t p_t(x) =& -\divv (p_t u_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t(x)\quad (\text{for all }x\in\R^d, 0\leq t\leq 1)
+\end{align} 
+where in (i) we used the assumption that $X_t\sim p_t$, in (ii) we swapped the derivative with the integral and (iii) we used \cref{eq:test_function_usecase}
+. This completes the proof that the Fokker-Planck equation is a necessary condition.\\
+
+Finally, we explain why it is also a sufficient condition. The Fokker-Planck equation is a partial differential equation (PDE). More specifically, it is a so-called \emph{parabolic partial differential equation}. Similar to \cref{thm:ode_existence_and_uniqueness}, such differential equations have a unique solution given fixed initial conditions (see e.g. \citep[Chapter 7]{evans2022partial}). Now, if \cref{e:fokker_planck_restated} holds for $p_t$, we just shown above that it must also hold for true distribution $q_t$ of $X_t$ (i.e. $X_t\sim q_t$) - in other words, both $p_t$ and $q_t$ are solutions to the parabolic PDE. Further, we know that the initial conditions are the same, i.e. $p_0=q_0=\pinit$ by construction of an interpolating probability path. Hence, by uniqueness of the solution of the differential equation, we know that $p_t=q_t$ for all $0\leq t\leq 1$ - which means $X_t\sim q_t=p_t$ and which is what we wanted to show.

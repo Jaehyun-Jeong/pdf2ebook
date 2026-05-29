@@ -1,0 +1,237 @@
+\section{Guidance: How To Condition on a Prompt}
+\label{sec:guidance}
+
+So far, the generative models we considered were \themebf{unguided}, e.g. an image model would simply generate \themeit{some} image. Mathematically speaking, this meant that our model returned samples from an \emph{unconditional} data distribution $\pdata(z)$.  However, in most cases, our goal is not to merely generate an arbitrary object, but to generate an object \textbf{\sffamily conditioned on some additional information}. In other words, we want to \textbf{guide} the model to generate objects of a certain kind.  For example, one might imagine a generative model for images which takes in a text prompt $y$, and then generates an image $x$ that fits to the text prompt $y$. As discussed in \cref{sec:introduction}, this means that we want to sample from $\pdata(z|y)$, that is, the \textbf{guided data distribution} \textbf{\sffamily conditioned on $y$}. We are going to discuss this in this section.
+
+\begin{remarkbox}[Terminology]
+To avoid a notation and terminology clash with the use of the word ``\text{conditional}'' to refer to conditioning on $z \sim \pdata$ (conditional probability path/vector field), we will make use of the term \themebf{guided} to refer specifically to conditioning on $y$ such as a text prompt.
+\end{remarkbox}
+
+\subsection{Vanilla Guidance}
+
+First, we discuss the ``standard'' way of how one would go about building a guided generative model. The short answer is as follows: We simply provide the input prompt $y$ to the network during training and inference and do everything in the same way as before. We formalize this in the following. We think of a conditioning variable or prompt $y$ to live in a space $\mathcal{Y}$. When $y$ corresponds to a text-prompt, for example, $\mathcal{Y}$ is the space of all texts. When $y$ corresponds to some discrete class label, $\mathcal{Y}$ would be discrete. We pose no constraints on $\mathcal{Y}$.
+
+
+% \begin{remarkbox}[Guided vs. Conditional Terminology]
+%     In these notes, we opt to use the term \themebf{guided} in place of \themebf{conditional} to refer to the act of conditioning on $y$. Here, we will refer to e.g., a \themebf{guided} vector field $\uref_t(x|y)$ and a \themebf{conditional} vector field $\uref_t(x|z)$. This terminology is consistent with other works such as \cite{lipman2024flow}. 
+% \end{remarkbox}
+
+% The goal of \themebf{guided generative modeling} is thus to be able to sample from $\pdata(x|y)$ \themeit{for any such $y$}. In the language of flow and score matching, and in which our generative models correspond to the simulation of ordinary and stochastic differential equations, this can be phrased as follows.
+
+% \begin{ideabox}[Guided Generative Model]
+We define a \themebf{guided diffusion model} to consist of a \themebf{guided vector field} $u_t^{\theta}(\cdot | y)$, parameterized by some neural network, and a time-dependent diffusion coefficient $\sigma_t$, together given by
+\begin{align*}
+    \textbf{\sffamily Neural network:}&\, u^\theta: \mathbb{R}^d \times \mathcal{Y} \times [0,1] \to \mathbb{R}^d,\,\, (x,y,t) \mapsto u_t^{\theta}(x|y)\\
+    \textbf{\sffamily Fixed:}&\, \sigma_t: [0,1] \to [0,\infty),\,\, t \mapsto \sigma_t
+\end{align*}
+Notice the difference from summary \ref{summary:diffusion_model}: we are additionally guiding $u_t^\theta$ with the input $y\in \mathcal{Y}$. For any such $y \in  \mathcal{Y}$, samples may then be generated from such a model as follows:
+\begin{align*}
+    \textbf{\sffamily Initialization:}\quad X_0&\sim\pinit \quad  &&\blacktriangleright\,\,\text{Initialize with simple distribution (such as a Gaussian)}\\
+    \textbf{\sffamily Simulation:}\quad \dd X_t &= u_t^\theta(X_t|y)\dd t + \sigma_t\dd W_t\quad &&\blacktriangleright\,\,\text{Simulate SDE from $t=0$ to $t=1$.}\\
+    \textbf{\sffamily Goal:}\quad X_1 &\sim  \pdata(\cdot | y) \quad &&\blacktriangleright\,\,\text{Goal is for $X_1$ to be distributed like $\pdata(\cdot|y)$.}
+\end{align*}
+When $\sigma_t = 0$, we say that such a model is a \themebf{guided flow model}. In the following, we restrict ourselves to flow matching and flow models to make things more concise but everything applies similarly to the general case.
+
+Next, we discuss: How would we train a guided flow model $u_t^\theta(x|y)$? A simple trick might to fix our choice of $y$, and to take our data distribution as $p_{\text{data}}(x|y)$. Then we have recovered the unguided generative problem as before, and we can accordingly construct a generative model using the conditional flow matching objective, viz.,
+\begin{equation}
+    \mathbb{E}_{z \sim p_{\text{data}}(\cdot|y), x \sim p_t(\cdot|z)} \lVert u_t^{\theta}(x|y) - \uref_t(x|z)\rVert^2.
+\end{equation}
+Note that the label $y$ does not affect the conditional probability path $p_t(\cdot|z)$ or the conditional vector field $\uref_t(x|z)$ (although in principle, we could make it dependent). % Since the label doesn't actually affect the guided conditional probability path, the above can be further simplified with $\uref_t(x|z,y) = \uref_t(x|z)$ (we might say: ``the guided conditional probability path is the same as the conditional probability path''), which we have worked with already. 
+Expanding the expectation over all such choices of $y$,  we thus obtain a \themebf{guided conditional flow matching objective}
+\begin{equation}
+    \label{eq:guided_cfm}
+    \mathcal{L}_{\text{CFM}}^{\text{guided}}(\theta) = \mathbb{E}_{(z,y) \sim p_{\text{data}}(z,y),\,t\sim \text{Unif}[0,1],\,x\sim p_t(\cdot|z)} \lVert u_t^{\theta}(x|y) - \uref_t(x|z)\rVert^2.
+\end{equation}
+One of the main differences between the guided objective in \cref{eq:guided_cfm} and the unguided objective from \cref{eq:cfm} is that here we are sampling $(z,y) \sim \pdata$ rather than just $z \sim \pdata$. The reason is that our data distribution is now, in principle, a joint distribution over e.g., both images $z$ and text prompts $y$. In practice, this means that a PyTorch implementation of \cref{eq:guided_cfm} would involve a dataloader which returned batches of \textbf{both $z$ and $y$}.
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/salimans_cfg.png}
+    \caption{Image generation with prompt/class $y=$``corgi dog''. Left: samples generated with vanilla guidance - the images do not fit well to the prompt. Right: samples generated with classifier guidance and $w = 4$. As shown, classifier-free guidance improves the adherence to the prompt. Figure taken from \cite{cfg}.}
+    \label{fig:guidance}
+\end{figure}
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figures/Figure_guidance_lecture_notes.pdf}
+    \caption{Illustration of classifier and classifier-free guidance. Classifier guidance decomposes the guided vector field $\uref_t(x|y)$ and the gradient of a classifier $\log p_t(y|x)$ and scales up the classifier with guidance scale $w>1$. Classifier-free guidance scales up the difference between both vector fields, thereby achieving the same effect but without having to train a separate classifier model.}
+\label{fig:classifier_and_cfg_illustrative_figure}
+\end{figure}
+
+\subsection{Classifer-Free Guidance}
+
+In theory, vanilla guidance should lead to a faithful generation procedure of $\pdata(\cdot|y)$. However, it was soon empirically realized that images samples with this procedure did not fit well enough to the desired label $y$ (see  \cref{fig:guidance}). This can have a diversity of reasons: the model might underfit (i.e. we do not actually learn the true marginal vector field) or our data might be imperfect (e.g. text-image pairs from the world wide web have a lot of errors). Therefore, to truly generate samples that fit better to a prompt, we have to find a way to  artificially reinforce the prompt variable $y$. The main technique for doing so is called  \themebf{classifier-free guidance} that is widely used in the context of state-of-the-art diffusion models, and which we discuss next. 
+
+\paragraph{Classifier Guidance.} For simplicity, we will focus here on the case of Gaussian probability paths. Recall from \cref{eq:gaussian_conditional_probability_paths}
+ that a Gaussian conditional probability path is given by $p_t(\cdot|\dap) = \mathcal{N}(\alpha_t \dap,\beta_t^2 I_d)$ 
+where the \text{noise schedulers} $\alpha_t$ and $\beta_t$ are continuously differentiable, monotonic, and satisfy $\alpha_0 = \beta_1 = 0$ and $\alpha_1 = \beta_0 = 1$. Further, recall that we can use \cref{prop:conversion_formula_gaussian_prob_path} to rewrite the guided vector field $\uref_t(x|y)$ in the following form using the guided score function $\nabla\log p_t(x|y)$
+\begin{equation}
+    \uref_t(x|y) = a_t\nabla \log p_t(x|y)+b_tx,
+\end{equation}
+Next, realize that $p_t(x|y)$ is a conditional density. Hence, we can use  Bayes' rule to rewrite the guided score as
+\begin{align}
+p_t(x|y)=&\frac{p_t(x)p_t(y|x)}{p_t(y)}\\
+\nabla \log p_t(x|y) =& \nabla \log \left(\frac{p_t(x)p_t(y|x)}{p_t(y)}\right) = \nabla \log p_t(x) + \nabla \log p_t(y|x), 
+\label{eq:bayes_rule}
+\end{align}
+where we used that the gradient $\nabla$ is taken with respect to the variable $x$, so that $\nabla \log p_t(y) = 0$. We may thus rewrite 
+\begin{align*}
+    \uref_t(x|y) = b_tx + a_t(\nabla \log p_t(x) + \nabla \log p_t(y|x)) = \uref_t(x) + a_t \nabla \log p_t(y|x).
+\end{align*}
+Notice the shape of the above equation: The guided vector field $\uref_t(x|y)$ is a sum of the unguided vector field $\uref_t(x)$ \emph{plus} a gradient of the likelihood $p_t(y|x)$ of the guidance variable $y$. As people observed that their image $x$ did not fit their prompt $y$ well enough, it was a natural idea to scale up the contribution of the $\nabla \log p_t(y|x)$ term, yielding
+\begin{align}
+    \tilde{u}_t(x|y) = \uref_t(x) + w a_t \nabla \log p_t(y|x),\quad &(\text{classifier guidance})
+\end{align}
+where $w > 1$ is known as the \themebf{guidance scale}. How can we learn the term $\log p_t(y|x)$? Note that this can be considered as a sort of classifier of noised data (i.e. it gives the log-likelihoods of $y$ given $x$). So we can simply learn it via supervised learning. This leads to \themebf{classifier guidance} \cite{classifier_guidance, yangsong_sde} (see \cref{fig:classifier_and_cfg_illustrative_figure} for an illustration). Classifier guidance was largely superseded by classifier-free guidance, which is why we will not discuss it further here. However, it forms the basis for the classifier-free guidance, as we will see next. Finally, note that this is a heuristic: for $w \neq 1$, it holds that $\tilde{u}_t(x|y) \neq \uref_t(x|y)$, i.e. therefore not the ``true'' guided vector field.
+
+\paragraph{Classifier-Free Guidance.} While classifier guidance is possible in principle, it comes with difficulties: The first thing is that we need to train a classifier alongside a flow/diffusion model - so we have 2 networks instead of 1. Further, if the $y$ is high-dimensional, e.g. a text prompt and not just a class, then $p_t(y|x)$ might be very hard to learn and the gradient $\nabla\log p_t(y|x)$ hard to obtain. For this reason, \themebf{classifier-free guidance} \citep{cfg} was introduced. Classifier-free guidance results in the theoretically equivalent effect as classifier guidance but without having to train a separate classifier.
+
+To do so, we may again apply the equality $$\nabla \log p_t(x|y) = \nabla \log p_t(x) + \nabla \log p_t(y|x)$$ to obtain 
+\begin{align*}\tilde{u}_t(x|y) &= \uref_t(x) + w a_t \nabla \log p_t(y|x)\\
+&= \uref_t(x) + w a_t (\nabla \log p_t(x|y) - \nabla \log p_t(x))\\
+&= \uref_t(x) - (w b_tx + w a_t \nabla \log p_t(x)) + (w b_t x + w a_t \nabla \log p_t(x|y))\\
+&= (1-w) \uref_t(x) + w \uref_t(x|y).\end{align*}
+We may therefore express the scaled guided vector field $\tilde{u}_t(x|y)$ as the linear combination of the unguided vector field $\uref_t(x)$ with the guided vector field $\uref_t(x|y)$. The idea might then to to train both an unguided $\uref_t(x)$ (using e.g., \cref{eq:cfm}) as well as a guided $\uref_t(x|y)$ (using e.g., \cref{eq:guided_cfm}), and then combine them at inference time to obtain $\tilde{u}_t(x|y)$. "But wait!", you might ask, "wouldn't we need to train two models then !?". It turns out that we can train both in one model: we may augment our label set with a new, additional $\varnothing$ label that denotes \textbf{the absence of conditioning}. We can then treat $\uref_t(x)=\uref_t(x|\varnothing)$. With that, we do not need to train a separate model to reinforce the effect of a hypothetical classifier. This approach of training a conditional and unconditional model in one (and subsequently reinforcing the conditioning) is known as \themebf{classifier-free guidance} (CFG) \cite{cfg} (see \cref{fig:classifier_and_cfg_illustrative_figure} for an illustration). 
+
+\begin{remarkbox}[Derivation for general probability paths]
+Note that the construction
+\begin{equation*}
+    \tilde{u}_t(x|y) = (1-w) \uref_t(x) + w \uref_t(x|y),
+\end{equation*}
+is equally valid for any choice probability path, not just a Gaussian one. When $w=1$, it is straightforward to verify that $\tilde{u}_t(x|y)=\uref_t(x|y)$. Our derivation using Gaussian paths was simply to illustrate the intuition behind the construction, and in particular of amplifying the contribution of a hypothetical ``classifier'' $\nabla \log p_t(y|x)$.
+\end{remarkbox}
+
+\paragraph{Training and Classifier-Free Guidance.} We must now amend the guided conditional flow matching objective from \cref{eq:guided_cfm} to account for the possibility of $y = \varnothing$. The challenge is that when sampling $(z,y) \sim \pdata$, we will never obtain $y = \varnothing$. It follows that we must introduce the possibility of $y = \varnothing$ artificially. To do so, we will define some hyperparameter $\eta$ to be the probability that we discard the original label $y$, and replace it with $\varnothing$. We thus arrive at our \themebf{CFG conditional flow matching training objective}
+\begin{align}
+    \mathcal{L}_{\text{CFM}}^{\text{CFG}}(\theta) &= \,\,\mathbb{E}_{\square} \lVert u_t^{\theta}(x|y) - \uref_t(x|z)\rVert^2\\
+    \square &= (z,y) \sim p_{\text{data}}(z,y),\, t \sim \text{Unif}[0,1],\, x \sim p_t(\cdot|z),\text{replace }y=\varnothing\text{ with prob. }\eta
+\end{align}
+
+
+\begin{algorithm}[h]
+\caption{Classifier-free guidance training for Gaussian probability path $p_t(x|z)=\mathcal{N}(x;\alpha_tz,\beta_t^2I_d)$}
+\label{alg:cfg_training}
+\begin{algorithmic}[1]
+\REQUIRE Paired dataset $(z,y)\sim \pdata$, neural network $u_t^\theta$
+\FOR{each mini-batch of data}
+    \STATE Sample a data example $(\dap,y)$ from the dataset.
+    \STATE Sample a random time $t \sim \text{Unif}_{[0,1]}$.
+    \STATE Sample noise $\epsilon\sim\mathcal{N}(0,I_d)$
+    \STATE Set $x=\alpha_t z + \beta_t \epsilon$
+    % \hfill (\text{General case: }$x\sim p_t(\cdot|z)$)
+    % %\IF{Flow matching}
+    \STATE With probability $p$ drop label: $y\leftarrow \varnothing$
+    \STATE Compute loss
+    \begin{align*}
+        \mathcal{L}(\theta) =& \|u_t^\theta(x|y)-(\dot{\alpha}_tz+\dot{\beta}_t\epsilon)\|^2 
+    \end{align*}
+    \STATE Update the model parameters $\theta$ via gradient descent on $\mathcal{L}(\theta)$.
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+We summarize our findings below.
+
+\begin{summarybox}[Classifier-Free Guidance for Flow Models]
+Given the unguided marginal vector field $\uref_t(x|\varnothing)$, the guided marginal vector field $\uref_t(x|y)$, and a \themebf{guidance scale} $w > 1$, we define the \themebf{classifier-free guided vector field} $\tilde{u}_t(x|y)$ by 
+\begin{equation}
+    \tilde{u}_t(x|y) = (1-w) \uref_t(x|\varnothing) + w \uref_t(x|y).
+    \label{eq:flow_cfg}
+\end{equation}
+By approximating $\uref_t(x|\varnothing)$ and $\uref_t(x|y)$ using the same neural network, we may leverage the following \themebf{classifier-free guidance CFM} (CFG-CFM) objective, given by
+\begin{align}
+    \label{eq:cfg_guided_cfm}
+    \mathcal{L}_{\text{CFM}}^{\text{CFG}}(\theta) &= \,\,\mathbb{E}_{\square} \lVert u_t^{\theta}(x|y) - \uref_t(x|z)\rVert^2\\
+    \square &= (z,y) \sim p_{\text{data}}(z,y),\, t \sim \text{Unif}[0,1],\, x \sim p_t(\cdot|z),\text{replace }y=\varnothing\text{ with prob. }\eta
+\end{align}
+In plain English, $\mathcal{L}_{\text{CFM}}^{\text{CFG}}$ might be approximated by
+\begin{alignat*}{3}
+    (z,y) &\sim \pdata(z,y) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $(z,y)$ from data distribution.}\\
+    t &\sim \text{Unif}[0,1) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $t$ uniformly on $[0,1)$.}\\
+    x &\sim p_t(x|z) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $x$ from the conditional probability path $p_t(x|z)$.}\\
+    \text{with prob.}&\,\eta,\, y \gets \varnothing \quad\quad\quad\quad && \blacktriangleright \quad \text{Replace $y$ with $\varnothing$ with probability $\eta$.}\\
+    \widehat{\mathcal{L}_{\text{CFM}}^{\text{CFG}}(\theta)} &=  \lVert u_t^{\theta}(x|y) - \uref_t(x|z)\rVert^2 \quad\quad\quad\quad && \blacktriangleright \quad \text{Regress model against conditional vector field.}
+\end{alignat*}
+At inference time, for a fixed choice of $y$, we may sample via
+\begin{alignat*}{3}
+    \textbf{\sffamily Initialization:}\quad X_0&\sim\pinit(x) \quad  && \blacktriangleright\,\,\text{Initialize with simple distribution (such as a Gaussian)}\\
+    \textbf{\sffamily Simulation:}\quad \dd X_t &= \tilde{u}_t^\theta(X_t|y)\dd t \quad && \blacktriangleright\,\,\text{Simulate ODE from $t=0$ to $t=1$.}\\
+    \textbf{\sffamily Samples:}\quad X_1& \quad && \blacktriangleright\,\,\text{Goal is for $X_1$ to adhere to the guiding variable $y$.}
+\end{alignat*}
+\end{summarybox}
+Note that the distribution of $X_1$ is not necessarily aligned with $X_1 \sim  \pdata(\cdot | y)$ anymore if we use a weight $w>1$. However, empirically, this shows better alignment with conditioning. Classifier-free guidance is therefore a  \textbf{heuristic} that is predominantly justified by its excellent empirical results. In fact, almost any image or video that you see that is AI-generated relied heavily on classifier-free guidance $w\geq 4$. In \cref{fig:guidance}, we illustrate class-based classifier-free guidance on 128x128 ImageNet, as in \cite{cfg}. Similarly, in \cref{fig:mnist_guidance}, we visualize the affect of various guidance scales $w$ when applying classifier-free guidance to sampling from the MNIST dataset of handwritten digits.
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/guidance.png}
+    \caption{The effect of classifier-free guidance applied at various guidance scales for the MNIST dataset of hand-written digits. Left: Guidance scale set to $w = 1.0$. Middle: Guidance scale set to $w = 2.0$. Right: Guidance scale set to $w = 4.0$. You will generate a similar image yourself in the lab three!}
+    \label{fig:mnist_guidance}
+\end{figure}
+
+\begin{remarkbox}[Guidance for Diffusion Models]
+It is straight-forward to extend the discussion from flow models to diffusion models. One simply replaces $u_t^\theta(x|y)$ by $\tilde{u}_t^\theta(x|y)$ and samples using SDEs as discussed in \cref{sec:training_generative_models}.
+\end{remarkbox}
+
+% \subsubsection{Guidance for Diffusion Models}
+% In this section we extend the reasoning of the previous section to diffusion models. First, in the same way that we obtained \cref{eq:guided_cfm}, we may generalize the conditional score matching loss \cref{eq:dsm} to obtain the \themebf{guided conditional score matching objective}
+% \begin{align}
+%     \label{eq:guided_dsm}
+%     \mathcal{L}_{\text{CSM}}^{\text{guided}}(\theta) &= \mathbb{E}_{\square}[\|s_t^\theta(x|y) - \nabla\log p_t(x|\dap)\|^2]\\
+%     \square &= (z,y)\sim \pdata(z,y), \,t\sim \text{Unif},\,x\sim p_t(\cdot|\dap).
+% \end{align}
+% A guided score network $s_t^\theta(x|y)$ trained with \cref{eq:guided_dsm} might then be combined with the guided vector field $u_t^\theta(x|y)$ to simulate the SDE
+% \begin{equation*}
+%     X_0 \sim \pinit,\quad \dd X_t = \left[u_t^\theta(X_t|y)+\frac{\sigma_t^2}{2}s_t^\theta(X_t|y)\right]\dd t + \sigma_t\dd W_t.
+% \end{equation*}
+
+% \paragraph{Classifier-Free Guidance.} We now extend the classifier-free guidance construction to the diffusion setting. By Bayes' rule (see \cref{eq:bayes_rule}),
+% \begin{equation*}
+%     \nabla \log p_t(x|y) = \nabla \log p_t(x) + \nabla \log p_t(y|x),
+% \end{equation*}
+% so that for \themebf{guidance scale} $w > 1$ we may define
+% \begin{align*}
+%     \tilde{s}_t(x|y) &= \nabla \log p_t(x) + w \nabla \log p_t(y|x)\\
+%                     &= \nabla \log p_t(x) + w (\nabla \log p_t(x|y) - \nabla \log p_t(x))\\
+%                     &= (1-w) \nabla \log p_t(x) + w \nabla \log p_t(x|y)\\
+%                     &= (1-w) \nabla \log p_t(x|\varnothing) + w \nabla \log p_t(x|y)
+% \end{align*}
+% We thus arrive at the CFG-compatible (that is, accounting for the possibility of $\varnothing$) objective 
+% \begin{align}
+%     \label{eq:cfg_guided_dsm}
+%     \mathcal{L}_{\text{DSM}}^{\text{CFG}}(\theta) &= \,\,\mathbb{E}_{\square} \lVert s_t^{\theta}(x|y) - \nabla \log p_t(x|z)\rVert^2\\
+%     \square &= (z,y) \sim p_{\text{data}}(z,y),\, t \sim \text{Unif}[0,1),\, x \sim p_t(\cdot|z),\,\text{replace }y=\varnothing\text{ with prob. }\eta,
+% \end{align}
+% where $\eta$ is a hyperparameter (the probability of replacing $y$ with $\varnothing$). We will refer $\mathcal{L}_{\text{CSM}}^{\text{CFG}}(\theta)$ as the \themebf{guided conditional score matching objective}. We recap as follows
+
+% \begin{summarybox}[Classifier-Free Guidance for Diffusions]
+% Given the unguided marginal score $\nabla \log p_t(x|\varnothing)$, the guided marginal score field $\nabla \log p_t(x|y)$, and a \themebf{guidance scale} $w > 1$, we define the \themebf{classifier-free guided score} $\tilde{s}_t(x|y)$ by 
+% \begin{equation}
+%     \tilde{s}_t(x|y) = (1-w) \nabla \log p_t(x|\varnothing) + w \nabla \log p_t(x|y).
+%     \label{eq:flow_cfg}
+% \end{equation}
+% By approximating $\nabla \log p_t(x|\varnothing)$ and $\nabla \log p_t(x|y)$ using the same neural network $s_t^\theta(x|y)$, we may leverage the following \themebf{classifier-free guidance CSM} (CFG-CSM) objective, given by
+% \begin{align}
+%     \label{eq:cfg_guided_dsm}
+%     \mathcal{L}_{\text{CSM}}^{\text{CFG}}(\theta) &= \,\,\mathbb{E}_{\square} \lVert s_t^{\theta}(x|(1-\xi)y + \xi \varnothing) - \nabla \log p_t(x|z)\rVert^2\\
+%     \square &= (z,y) \sim p_{\text{data}}(z,y),\, t \sim \text{Unif}[0,1),\, x \sim p_t(\cdot|z),\,\text{replace }y=\varnothing\text{ with prob. }\eta
+% \end{align}
+% In plain English, $\mathcal{L}_{\text{DSM}}^{\text{CFG}}$ might be approximated by
+% \begin{alignat*}{3}
+%     (z,y) &\sim \pdata(z,y) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $(z,y)$ from data distribution.}\\
+%     t &\sim \text{Unif}[0,1) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $t$ uniformly on $[0,1)$.}\\
+%     x &\sim p_t(x|z,y) \quad\quad\quad\quad && \blacktriangleright \quad \text{Sample $x$ from cond. path $p_t(x|z)$.}\\
+%     \text{with prob.}&\,\eta,\, y \gets \varnothing \quad\quad\quad\quad && \blacktriangleright \quad \text{Replace $y$ with $\varnothing$ with probability $\eta$.}\\
+%     \widehat{\mathcal{L}_{\text{DSM}}^{\text{CFG}}}(\theta) &=  \lVert s_t^{\theta}(x|y) - \nabla \log p_t(x|z)\rVert^2 \quad\quad\quad\quad && \blacktriangleright \quad \text{Regress model against conditional score.}
+% \end{alignat*}
+% At inference time, for a fixed choice of $w > 1$, we may combine $s_t^\theta(x|y)$ with a guided vector field $u_t^\theta(x|y)$ and define
+% \begin{align*}
+%     \tilde{s}^\theta_t(x|y) &= (1-w) s_t^\theta(x|\varnothing) + w s_t^\theta(x|y),\\
+%     \tilde{u}^\theta_t(x|y) &= (1-w) u_t^\theta(x|\varnothing) + wu_t^\theta (x|y).
+% \end{align*}
+% Then we may sample via
+% \begin{alignat*}{3}
+%     \textbf{\sffamily Initialization:}\quad X_0&\sim\pinit(x) \quad  && \blacktriangleright\,\,\text{Initialize with simple distribution (such as a Gaussian)}\\
+%     \textbf{\sffamily Simulation:}\quad \dd X_t &= \left[\tilde{u}_t^\theta(X_t|y)+\frac{\sigma_t^2}{2}\tilde{s}_t^\theta(X_t|y)\right]\dd t + \sigma_t\dd W_t \quad && \blacktriangleright\,\,\text{Simulate SDE from $t=0$ to $t=1$.}\\
+%     \textbf{\sffamily Samples:}\quad X_1& \quad && \blacktriangleright\,\,\text{Goal is for $X_1$ to adhere to the guiding variable $y$.}
+% \end{alignat*}
+% \end{summarybox}

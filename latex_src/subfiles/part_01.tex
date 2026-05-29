@@ -1,0 +1,88 @@
+\section{Introduction}
+\label{sec:introduction}
+\epigraph{Creating noise from data is easy; creating data from noise is generative modeling.}{Song et al. \cite{yangsong_sde}}
+
+
+\subsection{Overview}
+In recent years, we all have witnessed a tremendous revolution in artificial intelligence (AI). 
+Image generators like \themeit{Nano Banana} or \themeit{Stable Diffusion 3} can generate photorealistic and artistic images across a diverse range of styles, video models like Meta's \themeit{VEO-3} can generate highly realistic movie clips, and large language models like \themeit{ChatGPT} can generate seemingly human-level responses to text prompts. At the heart of this revolution lies a new ability of AI systems: the ability to \themebf{generate} objects. While previous generations of AI systems were mainly used for \themebf{prediction}, these new AI system are creative: they dream or come up with new objects based on user-specified input. Such \themebf{generative AI} systems are at the core of this recent AI revolution.  
+
+The goal of this class is to teach you two of the most widely used generative AI algorithms: \themebf{denoising diffusion models} \citep{song2020score} and \themebf{flow matching} \citep{lipman2022flow,liu2022flow, albergo2023stochastic, lipman2024flow}. These models are the backbone of the best image, audio, and video generation models (e.g., \themeit{Nano Banana}, \themeit{FLUX}, or \themeit{VEO-3}), and have most recently became the state-of-the-art in scientific applications such as protein structures (e.g., \themeit{AlphaFold3} is a diffusion model). Without a doubt, understanding these models is truly an extremely useful skill to have.
+
+All of these generative models generate objects by iteratively converting  \themebf{noise} into \themebf{data}. This evolution from noise to data is facilitated by the simulation of \themebf{ordinary or stochastic differential equations (ODEs/SDEs)}. Flow matching and denoising diffusion models are a family of techniques that allow us to construct, train, and simulate, such ODEs/SDEs at large scale with deep neural networks. While these models are rather simple to implement, the technical nature of SDEs can make these models difficult to understand. In this course, we provide a self-contained introduction to the necessary mathematical toolbox regarding differential equations to enable you to systematically understand these models. We then explain step-by-step the modern stack of state-of-the-art image and video generators. Beyond being widely applicable, we believe that the theory behind flow and diffusion models is elegant in its own right. Therefore, most importantly, we hope that this course will be a lot of fun to you. 
+
+\begin{remarkbox}[Additional Resources] 
+While these lecture notes are self-contained, there are two additional resources that we encourage you to use:
+\begin{enumerate}
+    \item \textbf{Lecture recordings:} These guide you through each section in a lecture format.
+    \item \textbf{Labs:} These guide you in implementing your own diffusion model from scratch. We highly recommend that you ``get your hands dirty'' and code.
+\end{enumerate}
+You can find these on our course website: \url{https://diffusion.csail.mit.edu/}.
+\end{remarkbox}
+
+% \ee{Recent years have seen a revolution in the capability and ubiquity of artificial-intelligence-based (AI-based) approaches to generative tasks. Image models like \themeit{Stable Diffusion} can generate both photorealistic and artistic images across a diverse range of styles, while video models like \themeit{Sora} can generate highly realistic movie clips. Large language models like \themeit{ChatGPT} can generate seemingly human-level responses to text prompts, while models like \themeit{AlphFold3} can generate novel protein structures. At the heart of this revolution lies the ability to \themeit{generate} objects. As we shall see, such \themebf{generative} models are qualitatively different from their \themebf{discriminative} predecessors (e.g., those used for classification-based tasks), and constitute a rich and rapidly expanding algorithmic design space. 
+
+% The objective of this course is therefore twofold: First and foremost is to leave you with systematic and principled understanding of \themebf{denoising diffusion} and \themebf{flow matching}, two closely-related model paradigms which serve as the backbone behind most state-of-the-art generative models.\footnote{The denoising diffusion and flow matching model families correspond to families of training objectives referred to as \themeit{score matching} and \themeit{flow matching}, respectively.} Second, and arguably the defining aspect of this course, is to realize the two aforementioned paradigms - diffusion and flow matching - as natural consequences of a more general framework involving tools from stochastic calculus, and in particular \themebf{ordinary and stochastic differential equation (SDEs)}, whose simulation provides a means for transforming \themeit{noise} into \themeit{data}. It is this second aspect which informs the structure of this course, and to this end we will endeavor to provide you with a working knowledge of SDEs and theory behind them. While this theoretical treatment will provide us with an elegant and unified perspective in investigating generative models, it is the instructors' firm belief that true learning requires \themeit{getting your hands dirty}. This course therefore involves a hands-on coding component, which will allow you to implement and experiment with concepts taught in class, and which will culminate in the design of your very own generative model built from scratch.}
+
+\subsection{Course Structure}
+
+We give a brief overview over of this document.
+\begin{itemize}
+\item \textbf{\sffamily Section \ref{sec:introduction}, Generative Modeling as Sampling:} We formalize what it means to ``generate'' an image, video, protein, etc. We will translate the problem of e.g., ``how to generate an image of a dog?'' into the more precise problem of sampling from a probability distribution.
+\item \textbf{\sffamily Section \ref{sec:odes_sdes}, Flow and Diffusion Models:} We explain the machinery of generation. As you can guess by the name of this class, this machinery consists of simulating ordinary and stochastic differential equations. We provide an introduction to differential equations and explain how to use them to construct generative models.
+\item \textbf{\sffamily Section \ref{sec:flow_matching}, Flow Matching:} Next, we  explain and derive \emph{flow matching}, a simple and scalable algorithm lying at the core of all afore-mentioned large-scale generative models such as Stable Diffusion, Nano Banana, or SORA.
+\item \textbf{\sffamily Section \ref{sec:training_generative_models}, Score Matching:} We study \emph{score functions} and how they can be learnt via \emph{score matching}. Not only is this the training algorithm for diffusion models, but it unlocks SDE sampling and guidance.
+\item \textbf{\sffamily Section \ref{sec:guidance}, Guidance:} We learn how to condition our samples on a prompt (e.g. ``an image of a cat'') and how we can enforce adherence to such a prompt via classifier-free guidance.
+\item  \textbf{\sffamily Section \ref{sec:image_generation}, Latent Spaces, Neural Network architectures:}  We discuss how one builds large-scale image and video generators such as \emph{Nano Banana}. This includes common neural network architectures and how to build things in latent space. We also survey state-of-the-art models.
+\item  \textbf{\sffamily Section \ref{sec:discrete_diffusion} (Optional), Discrete Diffusion Models:} We learn how to translate the principles of diffusion models from Euclidean space to discrete data such as language. This enables the construction of large language models using the principles of diffusion models.
+\end{itemize}
+
+\paragraph{Required background.} Due to the technical nature of this subject, we recommend some base level of mathematical maturity, and in particular some familiarity with probability theory. For this reason, we included a brief reminder section on probability theory in \cref{appendix:prob_theory_reminder}. Don't worry if some of the concepts there are unfamiliar to you.
+
+\subsection{Generative Modeling As Sampling}
+\label{subsec:gm_as_sampling}
+Let's begin by thinking about various data types, or \themebf{data modalities}, that we might encounter, and how we will go about representing them numerically:
+\begin{enumerate}
+    \item \textbf{\sffamily Image: }Consider images with $H \times W$ pixels where $H$ describes the height and $W$ the width of the image, each with three color channels (RGB). For every pixel and every color channel, we are given an intensity value in $\mathbb{R}$. Therefore, an image can be represented by an element $\dap\in\mathbb{R}^{H \times W \times 3}$.
+    \item \textbf{\sffamily Video: }A video is simply a series of images in time. If we have $T$ time points or \themebf{frames}, a video would therefore be represented by an element $\dap\in\mathbb{R}^{T\times H \times W \times 3}$.
+    \item \textbf{\sffamily Molecular structure: }A naive way would be to represent the structure of a molecule by a matrix \\$z=(z^1,\dots,z^N)\in\mathbb{R}^{3\times N}$ where $N$ is the number of atoms in the molecule and each $z^i\in\mathbb{R}^3$ describes the location of that atom. Of course, there are other, more sophisticated ways of representing such a molecule.
+\end{enumerate}
+In all of the above examples, the object that we want to generate can be mathematically represented as a vector (potentially after flattening). Therefore, throughout this document, we will have:
+\begin{ideabox}[Objects as Vectors]
+    We identify the objects being generated as vectors $z \in \mathbb{R}^d$.
+\end{ideabox}
+A notable exception to the above is text data, which is typically modeled as a discrete object by language models (such as \emph{ChatGPT}). While continuous data $z\in \R^d$ is our main focus, we also study text generation in \cref{sec:discrete_diffusion}.
+
+\paragraph{Generation as Sampling.}Let us define what it means to ``generate'' something. For example, let's say we want to generate an image of a dog. Naturally, there are \emph{many} possible images of dogs that we would be happy with. In particular, there is no one single ``best'' image of a dog. Rather, there is a spectrum of images that fit better or worse. In machine learning, it is common to realize this diversity of possible images as a \emph{probability distribution} over the \emph{space of images}. We call such a distribution a \themebf{data distribution} and denote it as $\pdata$. Mathematically, one can think of $\pdata$ as a \themebf{probability density}, i.e. a function $\pdata:\R^d\to\mathbb{R}_{\geq 0}$ that assigns each possible object $z\in \R^d$ a \emph{likelihood} $\pdata(z)\geq 0$. In the example of dog images, this distribution would therefore give higher likelihood $\pdata(z)$ to images $z$ that look more like a dog. Therefore, how "good" an image/video/molecule fits - a rather subjective statement - is replaced by how "likely" it is under the data distribution $\pdata$. With this, we can mathematically express the task of generation as sampling from the (unknown) distribution $\pdata$:
+\begin{ideabox}[Generation as Sampling]
+    Generating an object $z$ is modeled as sampling from the data distribution $z\sim \pdata$.
+\end{ideabox}
+A \themebf{generative model} is a machine learning model that allows us to generate samples from $\pdata$. In machine learning, we require data to train models. In generative modeling, we usually assume access to a finite number of examples sampled independently from $\pdata$, which together serve as a proxy for the true distribution.
+\begin{ideabox}[Dataset]
+    A dataset consists of a finite number of samples $z_1, \dots, z_N \sim \pdata$.
+\end{ideabox}
+For images, we might construct a dataset by compiling publicly available images from the internet. For videos, we might similarly look to use YouTube. For protein structures, sources like the RCSB Protein Data Bank (PDB) provide hundreds of thousands of experimentally resolved structures. As the size of our dataset grows very large, it becomes an increasingly better representation of the underlying distribution $\pdata$.
+
+\paragraph{Guided/Conditional Generation.} In many cases, we want to generate an object \themebf{conditioned} on some data $y$. For example, we might want to generate an image conditioned on $y=$``a dog running down a hill covered with snow with mountains in the background''. We can rephrase this as sampling from a \themebf{conditional distribution}:
+\begin{ideabox}[Guided Generation]
+Guided generation involves sampling from $z\sim \pdata(\cdot | y)$, where $y$ is a conditioning variable.
+\end{ideabox}
+We call $\pdata(\cdot|y)$ the \themebf{guided data distribution}. The guided generative modeling task typically involves learning to condition on an arbitrary, rather than fixed, choice of $y$. Using our previous example, we might alternatively want to condition on a different text prompt, such as $y=$``a photorealistic image of a cat blowing out birthday candles''. We therefore seek a single model which may be conditioned on any such choice of $y$. It turns out that techniques for unconditional generation are readily generalized to the conditional case. Therefore, for the first 3 sections, we will focus almost exclusively on the unconditional case (keeping in mind that conditional generation is what we're building towards).
+
+
+% \paragraph{Generative Models.} \ee{General note: this section makes a very large intuitive jump (with flow models) in just two sentences. The central point is therefore not ``generative modeling'' but specifically the idea of transforming samples from a simple Gaussian (a flow). I think the title should reflect this. See revised section below.} A \themebf{generative model} is a machine learning model that allows us to generate samples from $\pdata$. For this, we assume that we have access to some simple distribution $\pinit$ that we can easily sample from, e.g. $\pinit=\mathcal{N}(0,I_d)$ could be a Gaussian distribution. The goal of a generative model is then to transform samples from $X\sim \pinit$ into samples from $\pdata$. We note that $\pinit$ does not have to be simple or Gaussian at all. In fact, there are interesting usecases for leveraging this flexibility (see \ph{reference to where this is discussed}). We just call it $\pinit$ because in the majority of applications we think of it as a simple Gaussian.
+
+% \ee{Revise previous section: 
+\paragraph{Generative Models.} Abstractly speaking, a generative model is an algorithm that returns samples from $z\sim\pdata$ (or at least approximately). If $\pdata$ is the distribution of images of dogs, this algorithm would return random images of dogs. In this course, we will focus on the specific construction of generative models using flow or diffusion models as these represent the current state-of-the-art. However, it is important to keep in mind that many other generative models were developed (and maybe even more that will be discovered in the future).
+
+\begin{summarybox}[Generation as Sampling] 
+\label{par:summary}
+We 
+summarize the findings of this section:
+\begin{enumerate}
+\item In this work, we mainly consider the task of generating objects that are represented as vectors $z\in\mathbb{R}^d$ such as images, videos, and molecular structures.
+\item Generation is the task of generating samples from a probability distribution $\pdata$ having access to a dataset of samples $z_1,\dots,z_N\sim \pdata$ during training. 
+\item Guided generation assumes that we condition the distribution on a label $y$ and we want to sample from $\pdata(\cdot|y)$ having access to data set of pairs $(z_1,y)\dots,(z_N,y)$ during training.
+\item Our goal is to construct a generative model, i.e. a model that returns samples from $\pdata$ after training.
+\end{enumerate}
+\end{summarybox}

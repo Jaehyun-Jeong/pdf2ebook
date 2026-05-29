@@ -1,0 +1,183 @@
+\section{Additional Perspectives on VAEs}
+\label{sec:vae_appdx}
+In this section, we expand on the treatment of VAEs presented in the main text and provide a variational derivation of the total VAE loss from \cref{eq:total_vae_loss}. As a first step, notice that both the encoder and decoder give rise to a joint distribution over both $x$ and the latent $z$, viz.,
+\begin{align*}
+q_\phi(x,z) &= \pdata(x)q_\phi(\cdot |x) \quad& (\text{encoder joint}) \\
+p_\theta(x,z) &= p_\theta(x|z)\prior(z) \quad& (\text{decoder joint})
+\end{align*}
+We might therefore conceptualize training the VAE as learning $\phi$ and $\theta$ so that the encoder and decoder joint distributions are reasonably similar. We can do this via the KL-divergence of the joint latent and data distribution:
+\begin{equation}
+\begin{aligned}
+    \dkl{q_\phi(x,z)}{p_\theta(x,z)} &= \dkl{\pdata(x)q_\phi(z\mid x)}{p_\theta(x\mid z)\prior(z)}\\
+    &= \EE_{\blacksquare} \left[\log \left(\frac{\pdata(x)q_\phi(z\mid x)}{p_\theta(x\mid z)\prior(z)}\right)\right]\\
+    &= \textcolor{BrickRed}{\EE_{\blacksquare} \left[\log \pdata(x)\right]} + \textcolor{RoyalBlue}{\EE_{\blacksquare} \left[\log \left(\frac{q_\phi(z\mid x)}{\prior(z)}\right)\right]} - \textcolor{ForestGreen}{\EE_{\blacksquare} \left[\log p_\theta(x\mid z)\right]}\\
+    \blacksquare &= x \sim \pdata(x)\, z\sim q_\phi(z|x).
+\end{aligned}
+\label{eq:lvae_init}
+\end{equation}
+Let us now examine each of the three remaining terms in turn. First, we find that
+\begin{equation}
+    \textcolor{BrickRed}{\EE_{\blacksquare} \left[\log \pdata(x)\right] =  \textcolor{BrickRed}{\EE_{x\sim \pdata(x)} \left[\log \pdata(x)\right]} = C},
+\end{equation}
+for some constant $C$ independent of $\phi$ and $\theta$. Next, we find that
+\begin{equation}
+    \textcolor{RoyalBlue}{\EE_{\blacksquare} \left[\log \left(\frac{q_\phi(z\mid x)}{\prior(z)}\right)\right] = \mathbb{E}_{x \sim \pdata(x)}\left[\dkl{q_\phi(z\mid x)}{\prior(z)}\right]}
+\end{equation}
+encourages $q_\phi(z\mid x)$ to resemble the prior $\prior(z)$. Finally, we find that
+\begin{equation}
+    -\textcolor{ForestGreen}{\EE_{x \sim \pdata(x)\, z\sim q_\phi(z|x)} \left[\log p_\theta(x\mid z)\right]}
+\end{equation}
+corresponds the average negative log-likelihood, and thus serves as to minimize the reconstruction loss. Ignoring the constant term, we combine the \textcolor{RoyalBlue}{prior penalty} and \textcolor{ForestGreen}{reconstruction} terms to obtain that the VAE loss is actually simply the KL-divergence in joint data and latent space:
+\begin{align}
+    \label{eq:l_vae}
+    \mathcal{L}_{\text{VAE}}(\phi, \theta) &= \underbrace{\textcolor{RoyalBlue}{\mathbb{E}_{x \sim \pdata(x)}\left[\dkl{q_\phi(z\mid x)}{\prior(z)}\right]}}_{\text{prior enforcement loss}} - \underbrace{\textcolor{ForestGreen}{\EE_{x \sim \pdata(x)\, z\sim q_\phi(z|x)} \left[\log p_\theta(x\mid z)\right]}}_{\text{reconstruction loss}}\\
+    &=\dkl{q_\phi(x,z)}{p_\theta(x,z)}+\text{const}
+\end{align}
+Therefore, we can interpret the VAE as a KL-divergence in the joint space of latents and images.
+
+
+\paragraph{VAEs as generative models.} We now explain how one could interpret VAEs as generative models. We could generate a sample by setting $z\sim \prior=\mathcal{N}(0,I_k)$ and sampling $x\sim p_\theta(\cdot|z)$ from the decoder. The resulting distribution that we would get is given by:
+\begin{equation*}
+    p_\theta(x) = \int_z p_\theta(x|z) \prior(z)\dd z
+\end{equation*}
+We now want to demonstrate that the VAE learns to approximately sample from $p_\theta$. To show this, we need the following result:
+\begin{proposition}[Chain rule]
+Let $q(x,z), p(x,z)$ be distributions over two variables $x\in\mathbb{R}^{l_1},z\in\mathbb{R}^{l_2}$. Then, it holds that:
+\begin{align*}
+\dkl{q(z,x)}{p(z,x)}= \dkl{q(x)}{p(x)}+\mathbb{E}_{x\sim q}\left[\dkl{q(z|x)}{p(z|x)}\right].
+\end{align*}
+In particular, as the second summand is non-negative due to \cref{eq:kl_non_negative}, we obtain the data-processing inequality
+\begin{align}
+\label{eq:kl_upper_bound}
+\dkl{q(x)}{p(x)}\leq \dkl{q(z,x)}{p(z,x)}.
+\end{align}
+\label{prop:chain_rule}
+\end{proposition}
+\begin{proof}
+\begin{align*}
+   \dkl{q(z,x)}{p(z,x)}&=\mathbb{E}_{q}\left[
+   \log \frac{q(z,x)}{p(z,x)}
+   \right]\\
+&=\mathbb{E}_{(x,z) \sim q}\left[
+   \log \frac{q(z|x)}{p(z|x)}\frac{q(x)}{p(x)}
+   \right]\\
+&=\mathbb{E}_{(x,z) \sim q}\left[
+   \log \frac{q(z|x)}{p(z|x)}\right]+\mathbb{E}_{x\sim q} \left[\log \frac{q(x)}{p(x)}
+   \right]\\
+&=\dkl{q(x)}{p(x)}+\mathbb{E}_{x\sim q}\left[\dkl{q(z|x)}{p(z|x)}\right]
+\end{align*}
+where we have repeatedly applied the definition of KL divergence.
+\end{proof}
+By \cref{prop:chain_rule}, we can now show that
+\begin{equation}
+    \mathcal{L}_{\text{VAE}}(\phi, \theta) = \dkl{q_\phi(x,z)}{p_\theta(x,z)} +\text{const}\ge \dkl{\pdata(x)}{p_\theta(x)} +\text{const}
+    \label{eq:amort_zero}
+\end{equation}
+where we used the fact the $x$-marginal of $q_\phi(x,z)$ is $\pdata$. In other words, the VAE loss minimizes an upper bound on the KL-divergence between the data distribution $\pdata$ and the distribution generated by the VAE. Hence, we can look at VAEs as generative models in their own right. In the same way, we can show that 
+\begin{equation}
+    \mathcal{L}_{\text{VAE}}(\phi, \theta) = \dkl{q_\phi(x,z)}{p_\theta(x,z)} +\text{const}\ge \dkl{q_\phi(z)}{\prior(z)} +\text{const}
+    \label{eq:amort_one}
+\end{equation}
+In other words, the VAE objective minimize an upper bound to the KL-divergence between latent distribution and the prior.
+\paragraph{Why not stop at VAEs?}
+Per the discussion above, VAEs can be realized as generative models in their own right, with the encoder simply existing to facilitate the training of a complementary decoder which transforms a Gaussian into the desired data distribution. Samples could then be obtained by sampling $z \sim \prior$ and then $x \sim p_\theta(x|z)$. Why then, we do insist on training a separate generative model within the learned latent space? The answer has to do with the so-called \textbf{amortization gap} between the left and right hand sides of both \cref{eq:amort_zero} and \cref{eq:amort_one}, corresponding precisely to the gap in the information processing inequality. This gap is zero if and only if $q_\phi(z|x)=p_\theta(z|x)$, in which case the encoder represents the true posterior. Thus, while e.g., $\dkl{q_\phi(x,z)}{p_\theta(x,z)}$ is minimized implies $\dkl{q_\phi(z)}{\prior(z)}$ is minimized (see \cref{eq:amort_one}, a decrease in the former does not necessarily imply an equal decrease in the latter. Consequently, at the end of training, it is simultaneously true that both $\dkl{q_\phi(x,z)}{p_\theta(x,z)}$ and the amortization gap  
+\begin{equation}
+    \dkl{q_\phi(x,z)}{p_\theta(x,z)} - \dkl{q_\phi(z)}{\prior(z)}
+\end{equation}
+ are not completely minimized, so that $q_\phi(z) \neq \prior(z)$. Finally, observe that during training, the decoder learns to reconstruct from $q_\phi(z)$ rather than $\prior(z)$, so that switching to reconstructing from $\prior(z)$ during inference would amount to going out of distribution from training. In practice however, this mismatch is a feature rather than a bug. Practice has shown flow and diffusion models to be more capable models in general than the convolutional stacks used to implement the VAE decoder, so that it makes sense to farm off some of the generative complexity to the latent generative model. We return to this line of discussion later on in the discussion. Additionally, and beyond the scope of these notes, variational formulations of diffusion and flow models realize these modeling families as VAEs in their own right.
+\paragraph{The evidence lower bound.}
+    Properly rearranged, the terms within \cref{eq:lvae_init} can present various complementary perspectives. One is the so-called \themebf{evidence lower bound}, which we extract as follows. Observe that for fixed $x$
+    \begin{equation}
+    \begin{aligned}
+        \EE_{z\sim q_\phi(z|x)} \left[\log \left(\frac{q_\phi(z\mid x)}{p_\theta(x\mid z)\prior(z)}\right)\right]
+        &= \EE_{z\sim q_\phi(z|x)} \left[\log \left(\frac{q_\phi(z\mid x)}{p_\theta(z\mid x)}\right)\right] - \log p_\theta(x)\\
+        &= \dkl{q_\phi(z\mid x)}{p_\theta(z\mid x)} - \log p_\theta(x)
+    \end{aligned}
+    \label{eq:elbo_one}
+    \end{equation}
+    where the first equality is obtained from 
+    \begin{equation*}
+        p_\theta(z\mid x) = \frac{p_\theta(x\mid z)\prior(z)}{p_\theta(x)}.
+    \end{equation*}
+    We may thus rearrange \cref{eq:elbo_one} to obtain
+    \begin{equation}
+        \EE_{z\sim q_\phi(z|x)} \left[\log \left(\frac{p_\theta(x\mid z)\prior(z)}{q_\phi(z\mid x)}\right)\right] + \dkl{q_\phi(z\mid x)}{p_\theta(z\mid x)} = \log p_\theta(x),
+    \end{equation}
+    from which it follows that 
+    \begin{equation}
+        \underbrace{\EE_{z\sim q_\phi(z|x)} \left[\log \left(\frac{p_\theta(x\mid z)\prior(z)}{q_\phi(z\mid x)}\right)\right]}_{\triangleq \,\text{ELBO}(x;\phi, \theta)} \le \underbrace{\log p_\theta(x)}_{\text{evidence}}.
+    \end{equation}
+    The left-hand side is therefore commonly referred to as the evidence lower bound, or ELBO. We may now rewrite $\mathcal{L}_{\text{VAE}}$ from \cref{eq:l_vae} in terms of the ELBO via
+    \begin{equation}
+        \begin{aligned}
+            \mathcal{L}_{\text{VAE}}
+            &= \dkl{q_\phi(x,z)}{p_\theta(x,z)}+\text{const}\\
+            &= \mathbb{E}_{x \sim \pdata} \mathbb{E}_{z \sim q_\phi(z|x)} \left[\log \left(\frac{\pdata(x)q_\phi(z\mid x)}{p_\theta(x\mid z)\prior(z)}\right)\right] + \text{const}\\
+            &= \mathbb{E}_{x \sim \pdata} \left[\log \pdata(x) - \text{ELBO}(x; \phi, \theta)\right] + \text{const}\\
+            &= -\mathbb{E}_{x \sim \pdata} \left[\text{ELBO}(x; \phi, \theta)\right] \underbrace{- H(\pdata) + \text{const}}_{\text{const}}\\
+            &= -\mathbb{E}_{x \sim \pdata} \left[\text{ELBO}(x; \phi, \theta)\right] + \text{const}
+        \end{aligned}
+    \end{equation}
+    so that the original VAE objective can be seen as simply trying to maximize the expected ELBO. Finally, let's consider what occurs in the limit that we train our VAE perfectly.
+    
+\begin{remarkbox}[What Happens When $q_\phi(x, z) \approx p_\theta(x, z)$?]
+    First, note that the sampling distribution used to train our latent generative model is given by the marginal
+    \begin{align*}
+        q_{\phi}(z) = \int_x q_\phi(z | x) \pdata(x)\, \d x.
+    \end{align*}
+    If $q_\phi(x, z) = p_\theta(x, z)$, then in particular
+    \begin{align*}
+            q_{\phi}(z) = p_\theta(z) = \prior(z).
+    \end{align*}
+    Thus, $q_\phi(x, z) \approx p_\theta(x, z)$ \textbf{implies regularization of the latent sampling distribution}. Second, $q_\phi(x, z) \approx p_\theta(x, z)$ implies that the variational approximation $p_\theta(x \mid z) \approx q_\phi(x \mid z)$ is good, and in turn \textbf{implies low reconstruction error}.
+\end{remarkbox}
+
+\begin{remarkbox}[What's Variational About VAEs?]
+    Why can't we simply take $q_\phi(\cdot \mid x) = p_\theta(\cdot \mid x)$, thereby guaranteeing $q_\phi(x, z) = p_\theta(x, z) = 0$? The reason is that while we know the \themebf{likelihood} $p_\theta(x \mid z)$, the \themebf{posterior} 
+    \begin{align*}
+        p_\theta(z \mid x) = \tfrac{p_\theta(x \mid z)\prior(z)}{p_\theta(x)}
+    \end{align*} 
+    is generally intractable, as we lack access to the likelihood $p_\theta(x)$. The presence of \textit{variational} in VAE is thus due to the fact that $q_\phi(\cdot \mid x)$ serves as a substitute, or \themebf{variational approximation}, of the intractable posterior $p_\theta(\cdot \mid x)$.
+\end{remarkbox}
+
+\paragraph{Reconstruction vs Generation.} Given an encoder $q_\phi(z | x)$, decoder $p_\theta(x | z)$, and latent generative model $r_\psi$ trained to sample from $q_\phi(z)$, we may consider the following two generative models
+\begin{align*}
+r_{\psi, \theta}^{\text{recon}}(x_{\text{out}})
+&= \int_{z, x_{\text{in}}}
+    p_\theta(x_{\text{out}} \mid z)\,
+    q_\phi(z \mid x_{\text{data}})\,
+    \pdata(x_{\text{data}})
+    \d z
+    \d x_{\text{in}}
+& (\text{reconstruction sampler}) \\
+r_{\psi, \phi}^{\text{gen}}(x_{\text{out}}) &= \int_{z_{\text{gen}}} p_\theta(x_{\text{out}} | z_{\text{gen}})r_\psi(z_{\text{gen}})\, \d z_{\text{gen}} \quad& (\text{generative sampler})
+\end{align*}
+In other words, the reconstruction sampler starts at $x_{\text{data}} \in \pdata$ encodes to $z$, and decodes to $x_{\text{out}}$, while the generative sampler starts from $z_{\text{gen}} \in r_{\psi}$ from the generative model, and then passes through the decoder. By computing the Fréchet inception distance of the two respective samplers' distributions to $\pdata$, we obtain the \themebf{reconstruction-FID} (rFID) and \themebf{generative-FID} (gFID). One might also consider measuring the quality of the reconstruction sampler via the average \themebf{distortion} (root mean square error of reconstruction), although such a metric would not make sense for the generative sampler. As it turn out, there is a natural tension between the quality of the reconstruction sampler, and the quality of the generative sampler. Low rFID (a high quality reconstruction sampler) generally indicates low information loss in the latent, so that the latent distribution $q_\phi(z)$ largely resembles $\pdata$, and so that the task of learning the latent generative model is likely more difficult, raising gFID. Conversely, high rFID generally indicates high information loss, and an easier latent distribution $q_\phi(z)$ to learn, thereby lowering gFID. This phenomena is visualized in \cref{fig:autoencoder}.
+
+\paragraph{The Division of Labor.} The reconstruction-generative sampler tradeoff forces us to consider how information loss should be divided up between the autoencoder and the latent generative model $r_\psi$. Intuitively, $r_{\psi}$, via some learned vector field $u_t^\psi(z_t)$, transports a standard Gaussian to $q_\phi(z) \approx \prior$, after which the decoder $p_\theta(x|z)$ transports $q_\phi(z)$ to $\pdata$. Let us now (imprecisely) define the \themebf{rate} as the degree to which the latent distribution $q_\phi(z)$ matches the matches the $\prior(z)$, and by extension, the degree to which the task of generation is farmed off to the latent generative model.\footnote{We defer a more technical discussion of the rate to the next subsection.} This division of labor can be visualized by plotting the Pareto frontier between rate and distortion, as shown in \cref{fig:autoencoder}. In particular, when the rate is high, the distortion is low, and vice versa, offering a second perspective on the preceding discussion of reconstruction versus generation sampler quality. We culminate our discussion in the following insight.
+
+\begin{intuitionbox}[The Division of Labor]
+    The key insight from \cref{fig:autoencoder} is that an optimal division of labor exists at the ``knee'' of the Pareto frontier, at which point we obtain low rate (high compression!) without high distortion. In other words, such a point corresponds to a level of compression which simultaneously reduces the difficulty of training the underlying generative model while preserving reasonable reconstruction quality.
+\end{intuitionbox}
+
+\begin{figure}[!t]
+\centering
+\begin{subfigure}[c]{.49\textwidth}
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/gFID_rFID.png}
+\end{subfigure}
+\begin{subfigure}[c]{.49\textwidth}
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/bits_per_dim.png}
+\end{subfigure}%
+\caption{Right: The tradeoff between between gFID and rFID, figure taken from \citep{rfid_gfid}. Here, $f$ denotes the downsampling factor, and $d$ denotes the latent channel dimension. Right: Distortion (reconstruction quality) vs rate, taken from \citep{ho2020denoising, rombach2022high}. We remark that this particular curve was generated using a DDPM (itself a type of VAE). While certain technical subtleties in the distortion and rate computations may differ from the imprecise definition presented in this text, the overall intuition remains the same.}
+\label{fig:autoencoder}
+\end{figure}
+
+% \begin{remarkbox}[Flow-Based Decoders]
+    
+% \end{remarkbox}
+
+% \begin{remarkbox}[Quantization]
+    
+% \end{remarkbox}

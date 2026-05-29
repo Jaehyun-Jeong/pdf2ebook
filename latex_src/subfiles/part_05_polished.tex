@@ -1,0 +1,458 @@
+\section{Building Large-Scale Image or Video Generators}
+\label{sec:image_generation}
+In the previous sections, we learned how to train a flow matching or diffusion model to sample from a distribution $\pdata(x|y)$. This recipe is general and can be applied to a variety of different data types and applications. In this section, we examine in depth the particular cases of large-scale image and video generation, and including well-known models such as \themeit{FLUX 2.0, Stable Diffusion 3, Nano Banana} and \themeit{VEO-3 or Meta Movie Gen Video}. Finally, we'll apply what we've learned so far in the lab to build our own version of  such models from scratch! This section is broadly arranged as follows:
+\begin{itemize} 
+    \item[1.] \themebf{Neural network architectures:} We first discuss how raw conditioning input, including the time $t$, and guidance variable $y_{\text{raw}}$ (i.e., a discrete class label or raw text), is converted, or \themebf{embedded} into a vector-valued form digestible by the model $u_t^\theta(x|y)$ itself. Then we discuss popular architectural choices for $u_t^\theta(x|y)$, including the \themebf{U-Net} and \themebf{diffusion transformer}.
+    \item[2.] \themebf{Latent Space:} We discuss \themebf{variational autoencoders}, which allow for generative modeling in a lower dimensional \themebf{latent space}, thereby enabling ultra high-resolution image generation.
+    \item[3.]\themebf{Case Studies:} Finally, we will examine in depth the two state-of-the-art image and video models mentioned above - \themeit{Stable Diffusion} and \themeit{Meta MovieGen} - to give you a taste of how things are done at scale.
+\end{itemize}
+
+
+\subsection{Neural Network Architectures}
+\label{sec:image_architecture}
+
+Let us first turn our attention toward the design of scalable neural network architectures for flow and diffusion models targeting image-like modalities (e.g., images and videos). Specifically, we'll explore how the task of the (guided) vector field $u_t^\theta(x|y)$ with parameters $\theta$ is implemented in practice. Note that the neural network must have 3 inputs: a vector $x\in\R^d$, a conditioning variable $y\in\mathcal{Y}$, and a time value $t\in [0,1]$, as well as one output, a vector $u_t^\theta(x|y)\in\mathbb{R}^d$. For low-dimensional distributions (e.g. the toy distributions we have seen in previous sections), it is sufficient to parameterize $u_t^\theta(x|y)$ as a multi-layer perceptron (MLP), otherwise known as a fully connected neural network. That is, in this simple setting, a forward pass through $u_t^\theta(x|y)$ would involve concatenating our input $x$, $y$, and $t$, and passing them through an MLP. However, for complex, high-dimensional distributions, such as those over images, videos, and proteins, an MLP will likely not suffice, and it is common to use special, application-specific architectures. For the remainder of this subsection, we will consider the case of \textbf{images} (and by extension, videos). First, we'll consider how the raw conditioning information - the time $t$ and the conditioning variable $y$ - are \themebf{embedded} into a vector-valued form digestible by the actual model. Second, we'll consider two common architectural architectural choices for such a model: the \themebf{U-Net} \citep{ronneberger2015u, ho2020denoising, unet_cite_1, classifier_guidance}, and the \themebf{diffusion transformer} (DiT) \citep{dosovitskiy2020image, dit, ma2024sit}.
+
+\subsubsection{Embedding the Conditioning Variables}
+\label{subsubsec:encoding_the_conditioning_variables}
+
+\paragraph{Embedding Time.} For simple toy models, concatenating the raw value of $t$ to the input is sufficient to train a reasonably performant network. In practice, the scalar time is often embedded in a higher dimensional space using \themebf{Fourier features}, allowing the model to more faithfully capture high-frequency time dependence \citep{tancik2020fourierfeaturesletnetworks}. Explicitly, the featurization is given by
+\begin{equation}
+    \text{TimeEmb}(t) = \sqrt{\frac{2}{d}}\begin{bmatrix}
+    \cos(2\pi w_1 t) & \cdots & \cos(2\pi w_{d/2} t) & \sin(2\pi w_1 t) & \cdots & \sin(2\pi w_{d/2} t)
+    \end{bmatrix}^T,
+\end{equation}
+where the frequencies $w_i$ are set in the following way
+\begin{align}
+w_i \;=\; w_{\min}\left(\frac{w_{\max}}{w_{\min}}\right)^{\frac{i-1}{d/2-1}},
+\qquad i=1,\ldots,d/2.
+\end{align}
+This choice of $\text{TimeEmb}$ is a standard choice but this exact form is not strictly necessary. Rather, the above is simply a convenient way of obtaining a normed embedding of dimension $d$, i.e. $\|\text{TimeEmb}(t)\|=1$ (because $\sin^2+\cos^2=1$).
+
+\paragraph{Embedding Class Labels.}  When $y_{\text{raw}} \in \mathcal{Y} \triangleq \{0,\dots, N\}$ is just a class label, then it is often easiest to simply learn a separate embedding vector for each of the $N+1$ possible values of $y_{\text{raw}}$, and set $y$ to this embedding vector. One would consider the parameters of these embeddings to be included in the parameters of $u_t^\theta(x|y)$, and would therefore learn these during training.
+
+\paragraph{Embedding Textual Input} When $y_{\text{raw}}$ is a text-prompt, the situation is more complex, and approaches largely rely on frozen, pre-trained models. Such models are trained to embed a discrete text input into a continuous vector that captures the relevant information. One such model is known as \themebf{CLIP} (Contrastive Language-Image Pre-training). CLIP is trained to learn a shared embedding space for both images and text-prompts, using a training loss designed to encourage image embeddings to be close to their corresponding prompts, while being farther from the embeddings of other images and prompts \cite{clip}. We might therefore take $y = \text{CLIP}(y_{\text{raw}}) \in \mathbb{R}^{d_{\text{CLIP}}}$ to be the embedding produced by a frozen, pre-trained CLIP model. In certain cases, it may be undesirable to compress the entire sequence into a single representation. In this case, one might additionally consider embedding the prompt using a pre-trained transformer so as to obtain a sequence of embeddings. It is also common to combine multiple such pretrained embeddings when conditioning so as to simultaneously reap the benefits of each model \cite{sd3, moviegen}. For our purposes, one can simply assume that after applying such a model the prompt embedding has shape
+\begin{align*}
+\text{PromptEmbed}(y_{\text{raw}})\in \mathbb{R}^{S\times k}
+\end{align*}
+
+\begin{figure}[!t]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/dit.png}
+  \label{fig:sub1}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/clip.png}
+  \label{fig:sub2}
+\end{subfigure}
+\caption{Left: An overview of the diffusion transformer architecture, taken from \cite{dit}. Right: A schematic of the contrastive CLIP loss, in which a shared image-text embedding space is learned, taken from \cite{clip}.}
+\label{fig:test}
+\end{figure}
+
+% \paragraph{Feeding in the Embedding.} Suppose now that we have obtained our embedding vector $y \in \mathbb{R}^{d_y}$. Now what? The answer varies, but usually it is some variant of the following: feed it individually into every sub-component of the architecture for images. Let us briefly describe how this is accomplished in the U-Net implementation used in lab three, as depicted in \cref{fig:unet}. At some intermediate point within the network, we would like to inject information from $y \in \mathbb{R}^{d_y}$ into the current activation $x^{\text{intermediate}}_t \in \mathbb{R}^{C \times H \times W}$. We might do so using the procedure below, given in PyTorch-esque pseudocode.
+
+% \begin{align*}
+%     y &= \text{MLP}(y) \in \mathbb{R}^C\quad 
+%     && \blacktriangleright\,\,\text{Map $y$ from $\mathbb{R}^{d_y}$ to $\mathbb{R}^C$.}\\
+%     y &= \text{reshape}(y) \in \mathbb{R}^{C \times 1 \times 1}\quad 
+%     && \blacktriangleright\,\,\text{Reshape $y$ to ``look'' like an image.}\\
+%     x^{\text{intermediate}}_t &= \text{broadcast\_add}(x^{\text{intermediate}}_t,y) \in \mathbb{R}^{C \times H \times W}\quad && \blacktriangleright\,\,\text{Add $y$ to $x^{\text{intermediate}}_t$ pointwise.}
+% \end{align*}
+
+% One exception to this simple-pointwise conditioning scheme is when we have a sequence of embeddings as produced by some pretrained language model. In this case, we might consider using some sort of cross-attention scheme between our image (suitably patchified) and the tokens of the embedded sequence. We will see multiple examples of this in \cref{sec:large_scale_models}.
+
+
+\subsubsection{Diffusion Transformers}
+\label{subsec:transformers}
+Before we dive into the specifics of these architectures, let us recall from the introduction that an image is simply a vector $x \in \mathbb{R}^{C_{\text{image}} \times H \times W}$. Here $C_{\text{image}}$ denotes the number of \themebf{channels} (an RGB image typically would have $C_{\text{input}} = 3$ color channels), and $H$ and $W$ respectively denote the \themebf{height} and \themebf{width} of the image in pixels. One particularly prominent architectural class are so-called \themebf{diffusion transformers} (DiTs), and their variants, which use the \themebf{attention} mechanism to construct the network \cite{attention, dit, ma2024sit}. There are different flavors of diffusion transformers. We explain here a generic design, and note though that specific instantiations of DiTs might differ depending on model and application. For the remainder of this section, we will use $d$ to denote the hidden dimension, $L$ to denote the number of transformer layers, and $h$ to denote the number of heads per layer. Diffusion transformers are based on \themebf{vision transformers} (ViTs), whose main idea is essentially to divide up an image into patches, embed the patches to obtain a sequence of tokens, and process the resulting tokens via standard attention \cite{vit}. A final depatchification operation is applied at the end to recover an image of the correct shape. The initial patchification operation is simply a restructuring of the image tensor $x\in \mathbb{R}^{C\times H\times W}$:
+\begin{align*}
+    \text{Patchify}(x)\in \mathbb{R}^{N\times C'}
+\end{align*}
+where $C'=CP^2, N=(H/P)\cdot(W/P)$ for $P$ the patch size. Next, we apply a linear transformation to the output giving us the final patch embedding
+\begin{align*}
+    \text{PatchEmb}(x)=\text{Patchify}(x)W \in \mathbb{R}^{N\times d}
+\end{align*}
+where $W\in \mathbb{R}^{C'\times d}$ is a learnable weight matrix. The inputs to the diffusion transformer are then the time embedding, the prompt embedding, and the patchified image tensor given by (see \cref{subsubsec:encoding_the_conditioning_variables}):
+\begin{align*}
+\tilde{t} &=\text{TimeEmb}(t)\in \mathbb{R}^{d}\\
+\tilde{y}&=\text{PromptEmb}(y)\in\mathbb{R}^{S \times d}\\
+\tilde{x}_{0}&=\text{PatchEmb}(x)\in\mathbb{R}^{N\times d}
+\end{align*}
+Note that all elements have now the desired hidden dimension of the transformer. The diffusion transformer then iteratively updates $\tilde{z}_i$ via for $i=0,\cdots,L-1$ via transformer layers in a \themebf{DitBlock} (see  \cref{remark:dit_layer} for details):
+\begin{align}
+\tilde{x}_{i+1}=\text{DiTBlock}(\tilde{x}_i,\tilde{t},\tilde{y})\in\mathbb{R}^{N\times d}\quad (i=0,\dots,L-1).
+\end{align}
+where $N$ is the number of layers.
+Finally, a final operation applies a depatchification operation which maps the DiT output back to the desired output shape:
+\begin{align*}
+u=\text{Depatchify}(\tilde{x}_N\tilde{W})\in \mathbb{R}^{C\times H\times W},
+\end{align*}
+where $\tilde{W}\in \mathbb{R}^{d\times C'}$. The final tensor $u$ then serves as the output of the model and the predicted velocity $u_t^\theta(x|y)$.
+\begin{remarkbox}[DiT Block]
+\label{remark:dit_layer}
+For completeness, we present a brief mathematical description of a single DiT layer. While we attempt to include enough detail to allow for a general understanding of the DiT model family, we remind the reader that these choose to emphasize key algorithmic choices rather than architectural details. Now, let $x\in\mathbb{R}^{N\times d}$ denote the current sequence of patch tokens (here $x=\tilde x_i$),
+and let $y\in\mathbb{R}^{S \times d}$ denote the embedded guiding variable (here $y=\tilde y$).
+Then, a typical DiT block updates $x$ using (i) self-attention on patches, (ii) cross-attention to the prompt,
+and (iii) time conditioning via adaptive normalization (AdaLN).
+
+\paragraph{Scaled Dot Product Attention.}
+Given queries $Q\in\mathbb{R}^{N\times d_h}$, keys $K\in\mathbb{R}^{M\times d_h}$, and values $V\in\mathbb{R}^{M\times d_h}$,
+\[
+\mathrm{Attn}(Q,K,V)
+\;=\;
+\mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_h}}\right)V
+\;\in\;\mathbb{R}^{N\times d_h},
+\]
+where the softmax is applied row-wise.
+
+\paragraph{Multi-Head Attention.}
+Let $h$ denote the number of heads and $d_h=\frac{d}{h}$ the per-head dimension.
+For each head $h\in\{1,\dots,n_{\text{heads}}\}$, learn projection matrices
+$W_Q^{(h)},W_K^{(h)},W_V^{(h)}\in\mathbb{R}^{k\times d_h}$.
+Define
+\[
+\text{head}_h(x,z)
+\;=\;
+\mathrm{Attn}\!\big(xW_Q^{(h)},\,zW_K^{(h)},\,zW_V^{(h)}\big),
+\]
+where the \emph{source sequence} $z$ is either
+\[
+z=x \quad \text{(self-attention on patches)},\qquad
+z=y \quad \text{(cross-attention to the prompt)}.
+\]
+Concatenate heads and apply an output projection $W_O\in\mathbb{R}^{d\times d}$:
+\[
+\mathrm{MultiHeadattention}(x,z)
+\;=\;
+\mathrm{Concat}\big(\text{head}_1(x,z),\dots,\text{head}_{h}(x,z)\big)\,W_O
+\;\in\;\mathbb{R}^{N\times d}.
+\]
+
+\paragraph{Time Conditioning via Adaptive Normalization.}
+Let $\tilde t\in\mathbb{R}^d$ be the timestep embedding. A standard choice in DiTs is to use $\tilde t$
+to produce per-channel scale/shift parameters that modulate normalized activations \citep{perez2018film}.
+Concretely, let $g:\mathbb{R}^d\to\mathbb{R}^{2d}$ be an MLP and set
+\[
+(\gamma,\beta) = g(\tilde t),
+\]
+where $\gamma,\beta\in\mathbb{R}^{d}$ (or, depending on the implementation, separate $(\gamma,\beta)$ pairs for different
+sub-layers such as attention and MLP). Given a token matrix $x\in\mathbb{R}^{N\times d}$ and a normalization operator
+$\mathrm{Norm}(\cdot)$ (e.g.\ LayerNorm), define the modulated normalization
+\[
+\mathrm{AdaNorm}_{\tilde t}(x)
+\;=\;
+\bigl(1+\gamma\bigr)\odot \mathrm{Norm}(H) \;+\; \beta,
+\]
+where $\odot$ denotes elementwise multiplication with broadcasting over the token dimension.
+
+\paragraph{Putting It Together.}
+The combined operation, and thus the DitBlock, is given by.
+\begin{align*}
+x &\gets x + g_\text{self}(\tilde{t})\odot \mathrm{MultiHeadattention}\!\big(\mathrm{AdaNorm}_{\tilde t}(x),\,\mathrm{AdaNorm}_{\tilde t}(x)\big)\\
+x &\gets x + g_\text{cross}(\tilde{t})\mathrm{MultiHeadattention}\!\big(\mathrm{AdaNorm}_{\tilde t}(x),\,y\big)\\
+x &\gets x + g_\text{MLP}(\tilde{t})\mathrm{MLP}\!\big(\mathrm{AdaNorm}_{\tilde t}(x)\big),
+\end{align*}
+where the MLP is a position-wise feed-forward network, and the $g_{\cdots}$ are learnable gating parameters. The output $x\in \RR^{N\times d}$ becomes the next-layer
+patch-token sequence (in our notation, $\tilde x_{i+1}$). Finally, we note that class-conditioned DiT's, such as the one implemented in the lab, are typically simpler and eschew the cross attention layer in favor of a time and class-based AdaNorm conditioning.
+\end{remarkbox}
+
+
+
+\subsubsection{U-Net}
+The \themebf{U-Net} architecture \citep{ronneberger2015u} is an alternative architecture to the DiT architecture and is a specific type of convolutional neural network. Originally designed for image segmentation, its crucial feature is that both its input and its output have the shape of images (possibly with a different number of channels). This makes it ideal for parameterizing a vector field $x\mapsto u_t^\theta(x|y)$, as for fixed $y,t$ its input has the shape of an image and its output does, too. Accordingly, U-Nets have seen widespread use across much of the early literature on diffusion models \citep{ho2020denoising, unet_cite_1, classifier_guidance}. A U-Net consists of a series of \themebf{encoders} $\mathcal{E}_i$, and a corresponding sequence of \themebf{decoders} $\mathcal{D}_i$, along with a latent processing block in between, which we shall refer to as a \themebf{midcoder}.\footnote{Midcoder is a completely non-standard term used here to refer to the bottom-most part of the U-Net stack, and in analogy with the encoder and decoder.} For sake of example, let us walk through the path taken by an image $x_t \in \mathbb{R}^{3 \times 256 \times 256}$ (we have taken $(C_{\text{input}}, H, W) = (3, 256, 256)$) as it is processed by the U-Net:
+\begin{alignat*}{3}
+    x^{\text{input}}_t &\in \mathbb{R}^{3 \times 256 \times 256} \quad  
+    && \blacktriangleright\,\,\text{Input to the U-Net.}\\
+    x^{\text{latent}}_t = \mathcal{E}(x^{\text{input}}_t) &\in \mathbb{R}^{512 \times 32 \times 32} \quad && \blacktriangleright\,\,\text{Pass through encoders to obtain latent.}\\
+    x^{\text{latent}}_t = \mathcal{M}(x^{\text{latent}}_t) &\in \mathbb{R}^{512 \times 32 \times 32} \quad && \blacktriangleright\,\,\text{Pass latent through midcoder.}\\
+    x^{\text{output}}_t = \mathcal{D}(x^{\text{latent}}_t) &\in \mathbb{R}^{3 \times 256 \times 256} \quad && \blacktriangleright\,\,\text{Pass through decoders to obtain output.}
+\end{alignat*}
+Notice that as the input passes through the encoders, the number of channels in its representation increases, while the height and width of the images are decreased. Both the encoder and the decoder usually consist of a series of convolutional layers (with activation functions, pooling operations, etc. in between). Not shown above are two points: First, the input $x^{\text{input}}_t\in \mathbb{R}^{3 \times 256 \times 256}$ is often fed into an initial pre-encoding block to increase the number of channels before being fed into the first encoder block. Second, the encoders and decoders are often connected by \themebf{residual connections}. The complete picture is shown in \cref{fig:unet}.
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/unet.png}
+    \caption{A simplified U-Net architecture (an architecture like this was used in lab 03 of the 2025 version of this course).}
+    \label{fig:unet}
+\end{figure}
+At a high level, most U-Nets involve some variant of what is described above. However, certain of the design choices described above may well differ from various implementations in practice. In particular, we opt above for a purely-convolutional architecture whereas it is common to include attention layers as well throughout the encoders and decoders. The U-Net derives its name from the ``U''-like shape formed by its encoders and decoders (see \cref{fig:unet}).
+
+
+
+% In lab three, you'll have a chance to implement your own diffusion transformer from scratch. For the case of MNIST, in which case our guiding variable lies in the discrete set $\{0, \dots 0, \varnothing\}$, the diffusion transformer implementation from the lab proceeds as follows.
+
+\subsection{Working in Latent Space: (Variational) Autoencoders}
+Thus far, we have operated in the data space $\RR^d$. However, the cost of modeling directly within such a space quickly becomes prohibitively expensive as one scales to increasingly higher resolution images. For example, a $1024 \times 1024$ image with three RGB color channels corresponds to a total dimension of $d=H\cdot W\cdot 3\approx3*10^6$! Note that the dimension increases further for videos as everything scales with the number of frames $T$. As you can imagine, training over such a space quickly becomes infeasible. Unlike image classification, whose low-dimensional outputs allow for narrowing convolutional stacks, our flow-based modeling approach requires that our output $u_t^\theta(x)\in\mathbb{R}^d$ be just as large as our input. The important question thus becomes: \textbf{How can we model high-dimensional images within a reasonable memory and computation budget?}
+
+\subsubsection{Standard Autoencoders}
+A natural answer to this question lies in \themebf{compression}: perhaps the actual space of images, for example, lies near a much lower-dimensional manifold of the high dimensional image space. More concretely, we might consider an \themebf{encoder} $\mu_{\phi}: \mathbb{R}^d \to \mathbb{R}^k$, together with some \themebf{decoder} $\mu_{\theta}: \mathbb{R}^k \to \mathbb{R}^d$, which together map raw images $x \in \RR^d$ to and from latents $z\in\RR^k$, respectively. The dimension $k$ is typically chosen to be much smaller than $d$. For images, in which, for example, $d = 3 \times 1024 \times 1024$, it is not uncommon to downsample to obtain e.g., $k = 3 \times \tfrac{1024}{16} \times \tfrac{1024}{16}$. Together, $\mu_{\phi}$ and $\mu_{\theta}$ are referred to as an \themebf{autoencoder}. Ideally, $\mu_{\phi}$ and $\mu_{\theta}$ are chosen so as to achieve high reconstruction quality, or in other words, so that $\mu_{\theta}(\mu_{\phi}(x))$ resembles $x$ on average. Accordingly, autoencoders are usually trained with the \themebf{reconstruction loss}
+\begin{align*}
+\mathcal{L}_{\text{Recon}}(\phi,\theta)=&\mathbb{E}_{x\sim \pdata}\left[\|\mu_\theta(\mu_\phi(x))-x\|^2\right].
+\end{align*}
+which measures the squared error between the original data point $x$ and the reconstructed one $\mu_\theta(\mu_\phi(x))$.
+
+\paragraph{Amenability to Generative Modeling.} Unfortunately, the reconstruction loss above is not enough to train a ``good'' autoencoder. Recall that our eventual goal is to train a generative model in the latent space, and targeting the latent distribution $p_{\text{latent}}(z)$ given by $z = \mu_{\phi}(x), x \sim \pdata$. A generative model for $\pdata(x)$ is then realized by passing the output of our latent generative model through the decoder $\mu_{\theta}$. A subtle issue arises with autoencoders as we have currently formulated them in that we have little to no control over $p_{\text{latent}}(z)$, and thus essentially no guarantee that $p_{\text{latent}}(z)$ is even well-behaved enough to be amenable to training such a generative model (i.e., nice, simple, Gaussian-like). While transforming our data in latent space might have compressed it, we might have transformed the data distribution $\pdata$ into a very hard-to-learn distribution $\platent$. Therefore, the question is: how can we make sure that the latent distribution $\platent$ is still well-behaved and easy-to-learn? To allow for more explicit regularization of the latent distribution, we will now recast the concept of autoencoder in a more general probabilistic framework leading to the concept of a variational autoencoder.
+
+\subsubsection{Variational Autoencoders} A \themebf{variational autoencoder} (VAE) is obtained from our (deterministic) standard autoencoder formulation by relaxing the constraint that the encoder and decoder are deterministic functions. In particular, let us consider an encoder $q_\phi(z|x)$ with parameters $\phi$, and a decoder $p_\theta(x|z)$ with parameters $\theta$. The most common choice is to take 
+\begin{align}
+\label{eq:normal_vae}
+q_\phi(z|x)=\mathcal{N}(z;\mu_\phi(x),\diag(\sigma_\phi^2(x))),\quad p_\theta(x|z)=\mathcal{N}(x;\mu_\theta(z),\sigma_\theta^2(z)I_d)
+\end{align}
+where $\mu_\phi(x)\in \mathbb{R}^k$, $\sigma_\phi^2(x)\in\mathbb{R}_{\geq 0}^k$, $\mu_\theta(z)\in \mathbb{R}^d$, and $\sigma_\theta^2(z)\in\mathbb{R}_{\geq 0}$ are parameterized as neural networks and $\diag$ denotes the diagonal matrix. To encode or decode a variable, we sample 
+\begin{align*}
+z &\sim q_\phi(\cdot|x) &\quad& (\text{encode}) \\
+x &\sim p_\theta(\cdot|z) &\quad& (\text{decode})
+\end{align*}
+Finally, we note that when $\sigma_\phi(x) = 0$ and $\sigma_\theta(x) = 0$ always, we recover a standard autoencoder. Let us examine what a reconstruction loss looks like. A natural objective is the following:
+\begin{align}
+\mathcal{L}_{\text{VAE-Recon}}(\phi,\theta)=&-\EE_{x \sim \pdata(x),z\sim q_\phi(\cdot|x)} \left[\log p_\theta(x|z)\right]
+\end{align}
+Note the two changes: Instead of a deterministic encoding, we now sample $z\sim q_\phi(z|x)$. Further, we now take the negative log-likelihood of $x$ under decoding, i.e. the loss effectively asks: how likely would our original data point $x$ be if we  encoded and decoded it - and we take all possible decodings/encodings into account as things have become random now. For the Gaussian case, this reconstruction loss becomes:
+\begin{align}
+\mathcal{L}_{\text{VAE-Recon}}(\phi,\theta)=&\EE_{x \sim \pdata(x),z\sim q_\phi(z|x)} \left[\frac{1}{2\sigma^2_\theta(z)}\|x-\mu_\theta(z)\|^2+\frac{d}{2}\log \sigma_{\theta}^2(z)\right]+\text{const}
+\end{align}
+where we used the density of the normal distribution (see \cref{e:gaussian}) Hence, the VAE reconstruction loss is not that different from the standard AE reconstruction loss, we simply have to take into account all possible encodings $z\sim q_\phi(\cdot|x)$. The second term depending on the decoder variance controls the tradeoff between reconstruction accuracy and predictive uncertainty. Many implementations, including that in the lab, fix $\sigma_\phi(x)$ and $\sigma_\theta(z)$ to learned scalar constants (that is, independent of $x$ and $z$, respectively), thereby avoiding pathological behavior and numerical stability when learning variances. Therefore, the VAE reconstruction loss in this case then becomes basically the standard autoencoder reconstruction loss up to stochasticity in the encoding and constants:
+\begin{align}
+\mathcal{L}_{\text{VAE-Recon}}(\phi,\theta)=&\EE_{x \sim \pdata(x),z\sim q_\phi(z|x)} \left[\frac{1}{2\sigma_\theta^2}\|x-\mu_\theta(z)\|^2\right]+\text{const}
+\end{align}
+
+
+Let us now revisit our goal: We want to create an encoding of our data distribution $\pdata(x)$ such that after mapping it into a latent space, the distribution becomes ``nice'' or easy-to-learn. Toward this end, let us now introduce a \themebf{prior distribution} $\prior(z)$ over latents $z$. For our purposes, we will take $\prior=\mathcal{N}(0,I_k)$ to be an isotropic Gaussian. This choice of prior distribution $\prior$ effectively represents the ``ideal'' case for what the latent distribution should look like. A normal distribution would be very easy to learn, and would therefore satisfy our goal of obtaining a ``trainable'' latent distribution. The big idea is thus to regularize our encoder so as to ensure that the encoded data distribution is as close as possible to the $\prior$, which we accomplish via the auxiliary loss
+\begin{align}
+\mathcal{L}_{\text{VAE-Prior}}(\phi)=&\EE_{x \sim \pdata(x)} \left[\dkl{q_\phi(\cdot|x)}{\prior}\right],
+\end{align}
+and where $D_{KL}$ is the  \themebf{Kullback-Leibler (KL) divergence}. The KL-divergence is a fundamental way of measuring how different two probability distributions are. Explaining it in detail would go beyond the scope of this work but we give a brief background in \cref{remark:kl_divergence} as a reminder for the reader.  The loss $\mathcal{L}_{\text{VAE-Prior}}$ defined here now is very intuitive: We want that the encoding distributions looks like a Gaussian distribution for any data point $x$. If we do this for all $x$, it is natural to expect that then our latent distribution will look a Gaussian as well.
+\begin{remarkbox}[Background on KL-divergence]
+\label{remark:kl_divergence}
+For two probability densities $q,p$, the \themebf{Kullback-Leibler divergence} (KL-divergence) is defined as
+\begin{align*}
+    \dkl{q(x)}{p(x)}=\int q(x) \log \frac{q(x)}{p(x)}=\mathbb{E}_{X\sim q}\left[\log \frac{q(X)}{p(X)}\right].
+\end{align*}
+The KL divergence is a standard measure of dissimilarity between distributions. In particular, the KL divergence satisfies the following useful properties:
+\begin{align}
+\label{eq:kl_non_negative}
+\dkl{q(x)}{p(x)}&\geq 0,\\
+\dkl{q(x)}{p(x)}&=0\quad \Leftrightarrow \quad q=p.
+\end{align}
+i.e. it is always non-negative and it is zero if and only the two probability distributions coincide.
+\end{remarkbox}
+
+To define the loss function for a variational autoencoder, we can now combine both the reconstruction and the prior loss with a parameter weight $\beta\geq 0$ to \themebf{VAE training objective} given by
+\begin{align}
+\mathcal{L}_{\text{VAE}}(\phi,\theta)&=\mathcal{L}_{\text{VAE-Recon}}(\phi,\theta)+\beta\mathcal{L}_{\text{VAE-Prior}}(\phi)\\
+&=-\EE_{x \sim \pdata(x),z\sim q_\phi(z|x)} \left[\log p_\theta(x\mid z)\right]+\beta\EE_{x \sim \pdata(x)} \left[D_{KL}(q_\phi(\cdot|x)||\prior)\right]
+\end{align}
+where the first summand enforces that latent variables can be efficiently decoded back to data and the second summand enforces that our latent distribution is close to being a Gaussian. The parameter $\beta$ controls the strength of each. To make this loss more specific, let us derive the KL divergence for the Gaussian case:
+\begin{examplebox}[KL Divergence Between Isotropic Gaussians]
+\label{example:kl_divergence_between_isotropic_normals}
+Let $q(x)=\mathcal N(x;\mu_q,\diag(\sigma_q^2))$ and $p(x)=\mathcal N(x;\mu_p,\diag(\sigma_p^2))$ be Gaussians with diagonal covariance matrices, with $\sigma_q,\sigma_{p}\in\mathbb{R}_{\geq 0}^d$, and where $x \in \RR^d$. Then
+\begin{align}
+\dkl{q}{p}
+=\frac12\left(
+\mathcal{K}\left(\frac{\sigma_{q}^2}{\sigma_{p}^2}\right)+ \frac{\|\mu_q-\mu_p\|^2}{\sigma_p^2}
+\right),\quad \text{where }\mathcal{K}(\alpha)=\sum\limits_{i=1}^{d}\alpha_i-\log \alpha_i-1.
+\label{eq:kl_isotropic_gaussians}
+\end{align}
+The expression above is intuitive: If the mean and variances coincide, that then $\dkl{q}{p}=0$. Further, it increases with the squared error $\|\mu_{q}-\mu_{p}\|^2$ between the mean vectors. Finally, the function $\mathcal{K}(\alpha)$ has a unique minimum at $\alpha=1$ so that $\dkl{q}{p}$ is minimized when $\sigma_{q}=\sigma_{p}$.
+\begin{proof}
+We do the proof for $d=1$ (proof is analogous for $d>1$ by summing up each dimension). Given the density of the normal distribution, we know that (see \cref{e:gaussian}):
+\[
+\log q(x)= -\frac {1}{2}\log(2\pi\sigma_q^2)-\frac{1}{2\sigma_q^2}\|x-\mu_q\|^2,
+\qquad
+\log p(x)= -\frac 12\log(2\pi\sigma_p^2)-\frac{1}{2\sigma_p^2}\|x-\mu_p\|^2
+\]
+Then
+\begin{align}
+\label{eq:kl_normal_distributions}
+D_{\mathrm{KL}}(q\|p)
+&=\E_{x\sim q}\big[\log q(x)-\log p(x)\big]=\frac 12\log\frac{\sigma_p^2}{\sigma_q^2}
++\frac{1}{2\sigma_p^2}\E_q\!\left[\|x-\mu_p\|^2\right]
+-\frac{1}{2\sigma_q^2}\E_q\!\left[\|x-\mu_q\|^2\right].
+\end{align}
+For $x\sim \mathcal N(\mu_q,\sigma_q^2 I)$ we have
+\[
+\E_q\!\left[\|x-\mu_q\|^2\right]=\mathrm{tr}(\sigma_q^2 I)=\sigma_q^2.
+\]
+Combining this with the fact that $x-\mu_p=(x-\mu_q)+(\mu_q-\mu_p)$, and $\E_q[x-\mu_q]=0$, we obtain
+\[
+\E_q\!\left[\|x-\mu_p\|^2\right]
+=\E_q\!\left[\|x-\mu_q\|^2\right]+\|\mu_q-\mu_p\|^2
+=\sigma_q^2+\|\mu_q-\mu_p\|^2.
+\]
+Plugging these into \cref{eq:kl_normal_distributions} yields \eqref{eq:kl_isotropic_gaussians}.
+\end{proof}
+\end{examplebox}
+Let us now assume a Gaussian shape of the encoder. Then we obtain: 
+\begin{align}
+\mathcal{L}_{\text{VAE-Prior}}(\phi)=&\EE_{x \sim \pdata(x)} \left[\dkl{q_\phi(\cdot|x)}{\mathcal{N}(0,I_k)}\right]=\mathbb{E}\left[\frac{1}{2}
+\mathcal{K}\left(\sigma_{\phi}^2(x)\right)+ \frac{1}{2} \|\mu_\phi(x)\|^2\right]
+\end{align}
+This loss is intuitive: The mean $\mu_\phi(x)$ is penalized for being different from zero and the variance penalized for being different from $1$. As a total loss for the VAE, we obtain 
+\begin{equation}
+\begin{aligned}
+&\mathcal{L}_{\text{VAE}}(\phi,\theta)\\
+&=\mathcal{L}_{\text{VAE-Recon}}(\phi,\theta)+\beta\mathcal{L}_{\text{VAE-Prior}}(\phi)\\
+&=\EE_{x \sim \pdata(x),z\sim q_\phi(z|x)} \left[\underbrace{\frac{1}{2\sigma^2_\theta(z)}\|x-\mu_\theta(z)\|^2}_{\text{recon. error}}+\underbrace{\frac{d}{2}\log \sigma_{\theta}^2(z)
+}_{\text{decoder confidence}}+\underbrace{\frac{\beta}{2}
+\mathcal{K}\left(\sigma_{\phi}^2(x)\right)}_{\text{make latent variance}=1}+ \underbrace{\frac{\beta}{2} \|\mu_\phi(x)\|^2}_{\text{make latent mean}=0}
+\right]
+\end{aligned}
+\label{eq:total_vae_loss}
+\end{equation}
+The four terms of the above loss function are very intuitive: The first term is simply a reconstruction error. The second error describes the decoder's uncertainty: smaller variance makes the decoder more ``confident'' but also penalizes reconstruction errors more strongly. Further, we want to make the latent variance $1$ and the mean to be $0$ - to enforce that the distribution in latent is close to being Gaussian.
+
+\paragraph{Training a VAE.} It remains to discuss how we would minimize the VAE loss $\mathcal{L}_{\text{VAE}}(\phi,\theta)$. The problem with the loss is that so far, the distribution we take the expected value over ($q_\phi(z|x)$) still depends on the parameter $\phi$. However, we can apply the so-called \themebf{reparameterization trick} to rewrite it.  Specifically, for 
+\begin{align*}
+q_\phi(z|x)=\mathcal{N}(z;\mu_\phi(x),\sigma_\phi^2(x)I_k)
+\end{align*}
+we can obtain samples via
+\begin{align*}
+\epsilon\sim\mathcal{N}(0,I_k),\quad z=\mu_\phi(x)+\sigma_\phi(x)\epsilon \quad \Rightarrow\quad z\sim q_\phi(\cdot|x)
+\end{align*}
+Note that in this equation, the only source of noise/stochasticity is from $\epsilon$ whose distribution is independent of $\phi$. Therefore, we can rewrite the loss as:
+\begin{align*}
+\mathcal{L}_{\text{VAE}}(\phi,\theta)=&\EE_{x \sim \pdata(x),\epsilon\sim\mathcal{N}(0,I_k)} \left[\frac{1}{2\sigma^2_\theta(z)}\|x-\mu_\theta(\mu_\phi(x)+\sigma_\phi(x)\epsilon)\|^2+\frac{d}{2}\log \sigma_{\theta}^2(z)
++\frac{\beta}{2}
+\mathcal{K}\left(\sigma_{\phi}^2(x)\right)+ \frac{\beta}{2} \|\mu_\phi(x)\|^2
+\right]
+\end{align*}
+After reparameterization, the randomness comes only from $\epsilon\sim\mathcal{N}(0,I_k)$, whose distribution does not depend on $\phi$. Therefore, we can minimize this loss with the standard tools of deep learning. To simplify things even further, we can set $\sigma_{\theta}^2(z)=\sigma^2$ constant everywhere again and obtain:
+\begin{align*}
+\mathcal{L}_{\text{VAE}}(\phi,\theta)=&\EE_{x \sim \pdata(x),\epsilon\sim\mathcal{N}(0,I_k)} \left[\frac{1}{2\sigma^2}\|x-\mu_\theta(\mu_\phi(x)+\sigma_\phi(x)\epsilon)\|^2
++\frac{\beta}{2}
+\mathcal{K}\left(\sigma_{\phi}^2(x)\right)+ \frac{\beta}{2} \|\mu_\phi(x)\|^2
+\right]
+\end{align*}
+In \cref{alg:vae_training}, we summarize the training procedure of the VAE.
+\begin{algorithm}[ht]
+\caption{$\beta$-VAE Training Procedure (Gaussian decoder with fixed variance $p_\theta(x|z)=\mathcal{N}(x;\mu_\theta(z),\tilde{\sigma}^2 I_d)$)}
+\label{alg:vae_training}
+\begin{algorithmic}[1]
+\REQUIRE Dataset of samples $x\sim \pdata$, encoder networks $(\mu_\phi(x), \log\sigma_\phi^2(x))$, decoder network $\mu_\theta(z)$, latent dim $k$, constants $\beta\ge 0$, $\sigma^2>0$
+\FOR{each mini-batch $\{x_i\}_{i=1}^B$}
+    \STATE Encode each $x_i$: $\mu_i \gets \mu_\phi(x_i)$,\;\; $\log\sigma_i^2 \gets \log\sigma_\phi^2(x_i)$
+    \STATE Sample noise $\epsilon_i \sim \mathcal{N}(0,I_k)$
+    \STATE Reparameterize: $z_i \gets \mu_i + \sigma_i \odot \epsilon_i$ \hfill (where $\sigma_i=\exp(\tfrac12 \log\sigma_i^2)$)
+    \STATE Decode mean: $\hat{x}_i \gets \mu_\theta(z_i)$
+    \STATE Reconstruction loss:
+    \[
+        \mathcal{L}_{\text{recon}} \gets \frac{1}{B}\sum_{i=1}^B \frac{1}{2\tilde{\sigma}^2}\,\|x_i-\hat{x}_i\|^2
+    \]
+    \STATE KL loss to the prior $\prior(z)=\mathcal{N}(0,I_k)$:
+    \[
+        \mathcal{L}_{\text{KL}} \gets \frac{1}{B}\sum_{i=1}^B \frac12 \sum_{j=1}^k \left(\mu_{i,j}^2 + \sigma_{i,j}^2 - \log \sigma_{i,j}^2 - 1\right)
+    \]
+    \STATE Total loss: $\mathcal{L}\gets \mathcal{L}_{\text{recon}} + \beta\,\mathcal{L}_{\text{KL}}$
+    \STATE Update $(\phi,\theta)\gets \text{grad\_update}(\mathcal{L})$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+% \begin{algorithm}[h]
+% \caption{$\beta$-VAE Training Procedure (Gaussian decoder with fixed variance $p_\theta(x|z)=\mathcal{N}(x;\mu_\theta(z),\sigma^2 I_d)$)}
+% \label{alg:vae_training}
+% \begin{algorithmic}[1]
+% \REQUIRE Dataset of samples $x\sim \pdata$, encoder networks $(\mu_\phi(x), \log\sigma_\phi^2(x))$, decoder network $\mu_\theta(z)$, latent dim $k$, constants $\beta\ge 0$, $\sigma^2>0$
+% \FOR{each mini-batch $\{x_i\}_{i=1}^B$}
+%     \STATE Encode each $x_i$: $\mu_i \gets \mu_\phi(x_i)$,\;\; $\log\sigma_i^2 \gets \log\sigma_\phi^2(x_i)$
+%     \STATE Sample noise $\epsilon_i \sim \mathcal{N}(0,I_k)$
+%     \STATE Reparameterize: $z_i \gets \mu_i + \sigma_i \odot \epsilon_i$ \hfill (where $\sigma_i=\exp(\tfrac12 \log\sigma_i^2)$)
+%     \STATE Decode mean: $\hat{x}_i \gets \mu_\theta(z_i)$
+%     \STATE Reconstruction loss:
+%     \[
+%         \mathcal{L}_{\text{recon}} \gets \frac{1}{B}\sum_{i=1}^B \frac{1}{2\sigma^2}\,\|x_i-\hat{x}_i\|^2
+%     \]
+%     \STATE KL loss to the prior $\prior(z)=\mathcal{N}(0,I_k)$:
+%     \[
+%         \mathcal{L}_{\text{KL}} \gets \frac{1}{B}\sum_{i=1}^B \frac12 \sum_{j=1}^k \left(\mu_{i,j}^2 + \sigma_{i,j}^2 - \log \sigma_{i,j}^2 - 1\right)
+%     \]
+%     \STATE Total loss: $\mathcal{L}\gets \mathcal{L}_{\text{recon}} + \beta\,\mathcal{L}_{\text{KL}}$
+%     \STATE Update $(\phi,\theta)\gets \text{grad\_update}(\mathcal{L})$
+% \ENDFOR
+% \end{algorithmic}
+% \end{algorithm}
+
+
+
+\paragraph{Practical remarks.} The construction we developed here show the principles of autoencoder design. Of course, in practice, people might add more loss terms or other constraints. Therefore, we finally add a practical remarks about autoencoders:
+\begin{enumerate}
+\item \textbf{Choosing $\beta$ (and KL warm-up).}
+Large $\beta$ enforces latents closer to the prior but can hurt reconstructions and may trigger \emph{posterior collapse} (the encoder ignores $x$ and outputs $q_\phi(z|x)\approx \mathcal{N}(0,I_k)$).
+A common stabilization is \emph{KL warm-up}: start with $\beta=0$ and gradually increase it to a target value over the first epochs. However, in all modern autoencoders, the $\beta$ value is very small, i.e. $\beta<<1$.
+\item \textbf{Decoder variance.}
+Learning a Gaussian decoder variance $\sigma_\theta^2$ can be numerically delicate and may lead to degenerate solutions unless regularized.
+For stability, many implementations fix $p_\theta(x|z)=\mathcal{N}(x;\mu_\theta(z),\sigma^2 I_d)$ with constant $\sigma^2$, which makes the reconstruction term proportional to mean-squared error (up to constants).
+\item \textbf{Reconstruction losses beyond pixel MSE.}
+For images, a pixelwise Gaussian likelihood (mean squared error) often yields overly smooth reconstructions.
+In practice, people add \emph{perceptual losses} (feature-space losses using a pretrained network) to improve sharpness and semantic fidelity.
+\item \textbf{Adversarial and hybrid objectives.}
+To further improve visual realism, one can combine the VAE objective with an \emph{adversarial loss} (VAE-GAN style), using a discriminator on decoded samples.
+This typically sharpens outputs but introduces additional optimization instability and extra hyperparameters.
+\end{enumerate}
+
+
+
+\begin{remarkbox}[Working in Latent Space]
+To train a latent generative model, we simply follow the existing training recipe, but work directly in the \themebf{latent space}. At training time, we draw samples from $q_\phi(z|x)$ with $x \sim \pdata$, and at inference time, we sample $z$ from the latent diffusion or flow model, and then decode using $x = \mu_\text{mean}(z)$ (note that we take the mean rather than a random sample to avoid noise-induced artifacts). Intuitively, a well-trained autoencoder can be thought of as filtering out high-frequency or otherwise semantically meaningless details, allowing the generative model to ``focus'' on important, perceptually relevant features \cite{latent_diffusion}. At the time of the writing of this document, nearly all state-of-the-art approaches to image and video generation follow the so-called \themebf{latent diffusion} paradigm involving training a flow or diffusion model within the latent space of an autoencoder \citep{latent_diffusion,vahdat2021score}. However, it is important to note: one also needs to train the autoencoder before training the diffusion models. Crucially, performance now depends also on how good the autoencoder compresses images into latent space and recovers aesthetically pleasing images.
+\end{remarkbox}
+We provide additional discussion on VAEs in \cref{sec:vae_appdx}.
+
+\subsection{Case Study: Stable Diffusion 3 and Meta Movie Gen}
+\label{sec:large_scale_models}
+We conclude this section by briefly examining two large-scale generative models: \themeit{Stable Diffusion 3} for image generation and Meta's \themeit{Movie Gen Video} for video generation \citep{sd3, moviegen}. As you will see, these models use the techniques we have described in this work along with additional architectural enhancements to both scale and accommodate richly structured conditioning modalities, such as text-based input.
+
+\subsubsection{Stable Diffusion 3}
+
+Stable Diffusion is a series of state-of-the-art image generation models. These models were among the first to use large-scale latent diffusion models for image generation. If you have not done so, we highly recommend testing it for yourself online (\url{https://stability.ai/news/stable-diffusion-3}).\\
+
+%\paragraph{Training Objective.} 
+Stable Diffusion 3 uses the same conditional flow matching objective that we study in this work (see \cref{alg:training_score_matching_gaussian_paths}).\footnote{In their work, they use a different convention to condition on the noise. But this is only notation and the algorithm is the same.} As outlined in their paper, they extensively tested various flow and diffusion alternatives and found flow matching to perform best. For training, it uses classifier-free guidance training (with dropping class labels) as outlined above. Further, Stable Diffusion 3 follows the approach outlined in \cref{sec:image_architecture} by training within the latent space of a pre-trained autoencoder. Training a good autoencoder was a big contribution of the first stable diffusion papers.\\
+
+To enhance text conditioning, Stable Diffusion 3 makes use of both 3 different types of text embeddings (including CLIP embeddings as well as the sequential outputs produced by a pretrained instance of the encoder of Google's T5-XXL \cite{t5}, and similar to approaches taken in \cite{balaji, saharia}). Whereas CLIP embeddings provide a coarse, overarching embedding of the input text, the T5 embeddings provide a more granular level of context, allowing for the possibility of the model attending to particular elements of the conditioning text. To accommodate these sequential context embeddings, the authors then propose to extend the diffusion transformer to attend not just to patches of the image, but to the text embeddings as well, thereby extending the conditioning capacity from the class-based scheme originally proposed for DiT to sequential context embeddings. This proposed modified DiT is referred to as a \themebf{multi-modal DiT} (MM-DiT), and is depicted in \cref{fig:mmdit}. Their final, largest model has \textbf{8 billion parameters}. For sampling, they use $50$ steps (i.e. they have to evaluate the network $50$ times) using a Euler simulation scheme and a classifier-free guidance weight between $2.0$-$5.0$.
+% \begin{equation}
+% \label{eq:sd3_cfm}
+% \begin{aligned}
+%     \Lcond(\theta) &=  \mathbb{E}_{\square}[\|u_t^\theta(x_t) - \uref_t(x_t|\varepsilon)\|^2]\\
+%     \square &= \varepsilon \sim \mathcal{N}(0, I_d), x_t\sim p_t(\cdot|\varepsilon)
+% \end{aligned}
+% \end{equation}
+% where $p_0 = \mathcal{N}(0, I_d)$. 
+% Note that \cref{eq:sd3_cfm} differs from \cref{eq:cfm} in that we condition on $\varepsilon \in p_0 = \mathcal{N}(0,I_d)$ rather than $z \in p_{\text{data}}$. The analysis is otherwise fundamentally the same. Here, the conditional probability path $p_t(\cdot | \varepsilon)$ is defined implicitly as the law of the random variable
+% \begin{equation}
+%     X_t \triangleq \alpha_tX_1 + \beta_t \varepsilon, \quad \quad X_1 \sim p_{\text{data}},
+% \end{equation}
+% where $\alpha_t,\beta_t \in \mathcal{C}^2([0,1])$ satisfy $\alpha_0 = \beta_1 = 0$ and $\alpha_1 = \beta_0 = 1$ \cite{albergo2023stochastic}. Then, \cref{eq:sd3_cfm} may be modified to the general conditional setting as in \cref{eq:cfg_guided_cfm}.
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/mmdit.png}
+    \caption{The architecture of the multi-modal diffusion transformer (MM-DiT) proposed in \citep{sd3}. Figure also taken from \citep{sd3}.}
+    \label{fig:mmdit}
+\end{figure}
+
+%\paragraph{Architecture.}
+
+\subsubsection{Meta Movie Gen Video}
+Next, we discuss Meta's video generator, \themeit{Movie Gen Video} (\url{https://ai.meta.com/research/movie-gen/}). As the data are not images but \themeit{videos},  the data $x$ lie in the space $\mathbb{R}^{T \times C \times H \times W}$ where $T$ represents the new \themebf{temporal} dimension (i.e. the number of frames). As we shall see, many of the design choices made in this video setting can be seen as adapting existing techniques (e.g., autoencoders, diffusion transformers, etc.) from the image setting to handle this extra temporal dimension.\\
+
+%\footnote{The paper actually proposes a slightly different path given instead by the interpolant $X_t = tz + (1-(1-\sigma_{\text{min}})t)X_0$ where $\sigma_{\text{min}} = 10^{-5}$.}.
+% \begin{equation}
+% \label{eq:moviegen_cfm}
+% \begin{aligned}
+%     \Lcond(\theta) &=  \mathbb{E}_{\square}[\|u_t^\theta(x_t) - \uref_t(x_t|z)\|^2]\\
+%     \square &= z \sim p_{\text{data}}, x_t \sim p_t(\cdot|z),
+% \end{aligned}
+% \end{equation}
+% where the linear (CondOT) probability path $p_t(x_t|z)$ is given implicitly as the law of the interpolant
+% \begin{equation}
+%     X_t = tz + (1-t)X_0, \quad \quad X_0 \sim p_0 = \mathcal{N}(0, I_d)
+% \end{equation}
+%so that the conditional vector field $\uref_t(x_t|z)$ is given by $\frac{z - x_t}{1-t}$.
+%\paragraph{Architecture.} 
+Movie Gen Video utilizes the conditional flow matching objective with the same straight line schedulers $\alpha_t=t,\sigma_{t}=1-t$. Like Stable Diffusion 3, Movie Gen Video also operates in the latent space of frozen, pretrained autoencoder. Note that the autoencoder to reduce memory consumption is even more important for videos than for images - which is why most video generators right now are pretty limited in the length of the video they generate.
+% For brevity, we focus on three specific architectural design choices: the autoencoder, the diffusion-transformer backbone, and the conditioning mechanism. Like Stable Diffusion 3, Movie Gen Video also operates in the latent space of frozen, pretrained autoencoder. 
+Specifically, the authors propose to handle the added time dimension by introducing a \themebf{temporal autoencoder} (TAE) which maps a raw video $x_t' \in \mathbb{R}^{T' \times 3 \times H \times W}$ to a latent $x_t\in\mathbb{R}^{T \times C \times H \times W}$, with $\tfrac{T'}{T} = \tfrac{H'}{H} = \tfrac{W'}{W} = 8$ \cite{moviegen}. To accomodate long videos, a temporal tiling procedure is proposed by which the video is chopped up into pieces, each piece is encoder separately, and the latents are sticthed together \cite{moviegen}. The model itself - that is, $u_t^\theta(x_t)$ - is given by a DiT-like backbone in which $x_t$ is patchified along the time and space dimensions. The image patches are then passed through a transformer employing both self-attention among the image patches, and cross-attention with language model embeddings, similar to the MM-DiT employed by Stable Diffusion 3. For text conditioning, Movie Gen Video employs three types of text embeddings: UL2 embeddings, for granular, text-based reasoning \cite{ul2}, ByT5 embeddings, for attending to character-level details (for e.g., prompts explicitly requesting specific text to be present) \cite{byte5}, and MetaCLIP embeddings, trained in a shared text-image embedding space \cite{metaclip, moviegen}. Their final, largest model has \textbf{30 billion parameters}. For a significantly more detailed and expansive treatment, we encourage the reader to check out the Movie Gen technical report itself \citep{moviegen}.
+
+

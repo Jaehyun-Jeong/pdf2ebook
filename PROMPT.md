@@ -1,88 +1,95 @@
-# Ralph Loop — Objective (retargeted 2026-05-29)
+# Ralph Loop — Objective (retargeted 2026-05-29: LaTeX-recompile pipeline)
 
-**Maximize the MIT e-reader body font toward 8pt on the 6" device, preserving
-the EXACT original design (no reflow, no line cuts).** The user wants 8pt and the
-same design. Squeeze every design-preserving geometric lever first; only stop
-once the font sits at its true measured maximum AND printing is defect-free.
+**Produce a 6"-Kindle PDF of the MIT diffusion textbook with body font 8–10pt,
+the ORIGINAL design preserved, and ALL equations intact — by recompiling the
+arXiv LaTeX source onto a small page.** The breakthrough is already proven; the
+remaining job is to make wide display equations FIT the narrow page without
+shrinking body text below 8pt or breaking any equation.
 
-## Honest constraint (do not ignore, do not hide)
+## Why this approach (architecture change — authorized by the user)
 
-MEASURED: MIT body is a genuine full-width single column — body/prose lines reach
-~497pt; the trimmed crop is ~508pt. The 6" landscape long edge is 347.5pt. So the
-absolute whole-line scale ceiling is `usable_width / line_width`. At the current
-6pt device margin: 335.5/497 ≈ 0.675 → ~6.75pt. With margins driven to ~0:
-347.5/497 ≈ 0.70 → ~7.0pt. **A true 8pt would need ~398pt of screen width — the
-6" device does not have it.** 8pt is therefore only reachable by reflow (banned)
-or a wider device (user chose to stay 6"). So:
+Reformatting the rendered PDF caps at ~6.9pt on a 6" screen (a 497pt text line
+can't be enlarged without reflow). We stopped doing that. Instead we recompile
+arXiv:2506.02070's LaTeX source with a tiny page (`geometry` paperwidth/height =
+the 6" Kindle panel). A LaTeX point is absolute, so keeping the source's 10pt
+font on a 257x347pt page makes the body render at ~10pt PHYSICAL on the 6"
+screen — with real vector equations and the identical design. Verified working.
 
-- The target is 8pt; the REALISTIC ceiling on 6" is ~7pt. Push to that ceiling.
-- DO NOT stop at 6.54pt citing the old "6.6pt ceiling" until you have actually
-  implemented and verified the margin/crop levers below. The prior loop declared
-  the ceiling WITHOUT minimizing device margins or cropping to the true text bbox.
-- When you reach the true geometric max, STOP and DOCUMENT the achieved font and
-  the exact reason 8pt is unreachable on 6" (one short paragraph in FIXES.md).
-  Never claim 8pt if the render/metric does not show it.
+## Current state (commit at retarget)
 
-## The font levers to exhaust (each = one iteration, verify before commit)
+- Build: `cd latex_src && latexmk -pdf -interaction=nonstopmode main.tex` ->
+  `latex_src/main.pdf`. Builds clean (exit 0).
+- Page = 257.3 x 347.5 pt (exact 6" Kindle). Median body font ~9.96pt. 241 pages.
+- Design identical (theorem/callout boxes, fonts, colors, hyperlinks, figures).
+- **THE DEFECT TO FIX:** wide display equations (multi-line `align`, long single
+  lines) overflow the right page edge. Build emits ~258 Overfull \hbox, ~200 of
+  them >30pt over, worst ~246pt too wide. ~51 of 241 pages have content past the
+  right edge. Example pages: 94, 124, 191, 192, 199, 218 (and others).
+- The geometry knob lives in `latex_src/notes.sty` (the `\usepackage[...]{geometry}`
+  line we edited; `notes.sty.orig` is the untouched backup).
 
-1. **Minimize device margin.** `PAGE_MARGIN` is currently 6pt; the content is
-   width-fit, so every margin point shrinks the font. Try 2pt (or 0–1pt) and
-   re-measure. Verify nothing touches/!clips the page edge.
-2. **Crop to the TRUE text bbox, not the inflated crop.** If `stable_crop_boxes`
-   leaves slack beyond the real text column (crop 508 vs text 497), fitting to the
-   true column raises scale. Verify no real glyph is trimmed.
-3. **Per-region width-fit (if not already).** Don't let a single rare wide element
-   (a full-width display equation, a wide figure, a header band) force the WHOLE
-   page to a smaller scale than the body prose needs. Fit narrow body regions to
-   the screen on their own where it doesn't break reading order. Verify wide
-   elements are NOT clipped (scale them whole if oversized).
+## The one rule
 
-After each: re-measure median on-device body font and confirm it went UP with
-zero new defects. Stop when further levers yield <0.1pt or would break design.
+Each iteration: read state, pick the SINGLE top item in `fix_plan.md`, make ONE
+focused change (to `notes.sty`, `math_commands.tex`, a wrapper, or a small patch
+applied by `build.sh`), rebuild, verify visually + by metric, commit, update the
+plan. Then stop.
 
-## What "stable printing" means (unchanged — no regressions)
+## Levers to fit wide equations (keep body >= 8pt, keep equations correct)
 
-No text line cut at a page/sub-page boundary; no equation/figure/table split; no
-near-empty pages; no duplicated bands; no content clipped off the edge; correct
-reading order. The equation-integrity, furniture-strip, and callout-box fixes are
-DONE — do not regress them (see AGENT.md / fix_plan.md "Done").
+Prefer global, low-risk levers first; per-equation edits last.
+1. **Shrink DISPLAY math only** (not body): e.g. wrap display math in a smaller
+   size, set a smaller `\everydisplay`/`\Dorder`, or use `\thinmuskip` tweaks.
+   Body prose stays ~10pt; only equations get a bit smaller. Cheapest win.
+2. **Auto-wrap long equations** with `breqn` (`dmath`/`dgroup`) — but it needs
+   per-environment edits and can choke on custom macros; test on a few first.
+3. **Scale individual oversized equations** with `adjustbox`/`\resizebox{\linewidth}{!}`
+   — surgical, keeps them vector + correct, only the widest ones.
+4. **Landscape pages** (`pdflscape`) for a handful of genuinely un-shrinkable wide
+   equations/figures — read sideways, still correct.
+5. **Tune page width** slightly (notes.sty geometry) — small increases reduce
+   overflow but shrink on-screen font; only if levers 1–4 are insufficient and
+   font stays >= 8pt.
+BANNED: dropping body font below 8pt; rasterizing or otherwise mangling math
+(it must stay correct, selectable vector); reverting to the pdf2ereader.py
+reformat approach.
 
 ## Environment
 
-- Python: `.venv/bin/python` (PyMuPDF). Input: `papers/MIT_flow_matching_diffusion.pdf`.
-- Convert (design-preserving only — crop / fitw / 2col, NEVER reflow):
-  `.venv/bin/python pdf2ereader.py "papers/MIT_flow_matching_diffusion.pdf" --mode fitw -o /tmp/out.pdf`
-- Render to inspect: `.venv/bin/python render_samples.py /tmp/out.pdf diag 150`
-  then **Read** `diag/*.png`.
-- Metric: per output page compute content-bbox coverage AND median on-device font
-  size (pt); scan for blank pages (<15% coverage). Goal: median body font UP toward
-  ~7pt, blank pages 0, coverage healthy, zero clipped pages.
-- Deliverable: regenerate `papers/ereader/MIT_flow_matching_diffusion.ereader.pdf`
-  from the improved tool on the iteration that lands the best font.
+- LaTeX: system `pdflatex`, `biber`, `latexmk` (TeX Live 2019, apt-installed).
+- Rendering/metric: `.venv/bin/python` (PyMuPDF) — run from repo ROOT, the venv
+  is NOT inside latex_src.
+- Build:        `cd latex_src && latexmk -pdf -interaction=nonstopmode main.tex`
+- Clean build:  `cd latex_src && latexmk -C` (then rebuild) if aux state corrupts.
 
-## Workflow each iteration
+## How to verify EVERY iteration (do not skip)
 
-1. Read `AGENT.md` and `fix_plan.md`.
-2. Pick the top item in `fix_plan.md` "To do". Make ONE change to `pdf2ereader.py`.
-3. `ast.parse` AND run a real conversion (a parse-OK file can still NameError).
-4. Verify: metric (font UP, no new blanks/clips) + render and Read a dense body
-   page, an equation page, a figure page. Confirm font rose and nothing broke.
-5. Better → commit referencing the item + append a "FIXED: ..." line to FIXES.md.
-   Worse/broken → `git checkout -- pdf2ereader.py`, note why in AGENT.md.
-6. Update `fix_plan.md` and `AGENT.md`. Regenerate the deliverable on the best iter.
+1. Rebuild; confirm `exit 0` and `latex_src/main.pdf` exists.
+2. METRIC (from repo root, .venv/bin/python + fitz):
+   - median body font (sample prose pages) — must stay 8–10pt.
+   - count pages with content past the right edge (block x1 > pagewidth+2) AND
+     count Overfull \hbox >30pt in the build log — both must go DOWN, target ~0.
+   - page_count > 0, text selectable (get_text non-empty).
+3. RENDER + Read (`.venv/bin/python` get_pixmap dpi=200 -> PNG, then Read):
+   a dense body page, a PREVIOUSLY-OVERFLOWING equation page (e.g. 94 or 124),
+   and a figure page. Confirm the equation now fits, is still correct, and body
+   text is unchanged ~10pt. Never claim a fix you did not render this iteration.
+4. Better -> commit referencing the fix_plan item + append a line to FIXES.md.
+   Worse/broken -> revert the edit (`git checkout --` the file, or restore from
+   notes.sty.orig), note why in AGENT.md.
 
 ## Acceptance / stopping
 
-Stop when the median body font is at its true geometric maximum on the 6" device
-(all three levers exhausted; further change yields <0.1pt or would break design),
-printing defects are zero, AND two consecutive double-check passes find nothing
-new. Record the achieved font and — if it is below 8pt — the exact geometric
-reason 8pt is impossible on 6" without reflow.
+Stop when: zero (or a tiny, documented, landscape-handled) set of pages have
+equation overflow; body font is 8–10pt everywhere; every equation is correct and
+sharp; design preserved; AND two consecutive double-check passes (independent
+page-sets, including the formerly-broken pages) find no overflow or new defect.
+Then regenerate the deliverable to `papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf`.
 
 ## Guardrails
 
-- One change per iteration. Verify before commit. Never claim a font you did not
-  measure AND render this iteration.
-- Reflow is BANNED. Line-cutting (left/right split of a text column) is BANNED.
+- One change per iteration. Verify before commit. Never claim a result you did
+  not build + render + measure this iteration.
+- Keep equations correct vector LaTeX. Body font >= 8pt always.
 - Never edit `loop.sh` or `PROMPT.md` from inside the loop.
-- If image display drops, gate commits on the metric and note "visual pending".
+- If a build hangs or aux state corrupts, `latexmk -C` and rebuild before judging.

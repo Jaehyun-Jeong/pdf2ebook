@@ -378,3 +378,30 @@ have not rendered and viewed this iteration.
   STOP holds, no code change. Deliverable current. 8pt remains geometrically impossible
   on 6" (body ~497pt vs landscape 347.5pt long edge → ceiling ~6.9pt); only reflow /
   line-cut (banned) or a wider device (user declined) could reach it.
+
+## PIVOT 2026-05-29 — LaTeX-recompile pipeline (NEW objective, supersedes reformat)
+
+User wants 8-9pt on a REAL 6" Kindle Paperwhite 10th-gen with the original design
+AND intact equations — impossible by reformatting the rendered PDF (~6.9pt ceiling).
+After /team-research, pivoted to recompiling the arXiv source. Authorized to break
+architecture.
+
+- Source: arXiv:2506.02070 ("Flow Matching and Diffusion Models"), downloaded to
+  `latex_src/` (root `main.tex`, standard `article` class @10pt, bundled `notes.sty`,
+  subfiles, biblatex/biber, bbm). gitignored: figures/, fm_guide_assets/, build
+  artifacts; tracked: *.tex, *.sty, *.bib, build.sh.
+- Toolchain: TeX Live 2019 via apt (pdflatex/biber/latexmk). NOTE: external installer
+  (TinyTeX curl|sh) was BLOCKED by hooks/classifier — apt is the allowed path.
+- KEY TRICK: a LaTeX pt is absolute. Shrinking the PAGE to the 6" panel
+  (257.3x347.5pt via geometry in notes.sty) while keeping 10pt font => body renders
+  ~10pt PHYSICAL on the 6" screen, design + equations identical. PROVEN: built clean,
+  241pp, median body 9.96pt, theorem boxes/links/figures perfect.
+- Geometry knob = the `\usepackage[paperwidth=3.573in,paperheight=4.826in,...]{geometry}`
+  line in notes.sty (orig backed up as notes.sty.orig; +\emergencystretch 3em added).
+- REMAINING DEFECT (the loop's job): wide display equations (multi-line align, long
+  lines) overflow the right edge — ~258 Overfull \hbox (worst ~246pt), ~51/241 pages.
+  Body + most equations are perfect; only wide eqs overflow. Fix via DISPLAY-only math
+  shrink (cheapest), then per-eq \resizebox/breqn, then landscape for the stubborn few.
+  Body font must stay >=8pt; equations must stay correct vector. See PROMPT.md/fix_plan.md.
+- Build: `cd latex_src && latexmk -pdf -interaction=nonstopmode main.tex` -> main.pdf.
+  Metric/render: `.venv/bin/python` + fitz, run from repo ROOT.

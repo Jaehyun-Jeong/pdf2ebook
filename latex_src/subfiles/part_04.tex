@@ -1,0 +1,380 @@
+\section{Score Functions and Score Matching}
+\label{sec:training_generative_models}
+In the last section, we showed how to train a flow model with flow matching. In this section, we discuss diffusion models and demonstrate how to train them using \textbf{score matching}.
+
+\subsection{Conditional and Marginal Score Functions}
+
+\begin{wrapfigure}{r}{0.6\textwidth}
+  %\begin{center}
+\includegraphics[width=0.6\textwidth]{figures/score_figure.pdf}
+  %\end{center}
+\caption{\label{fig:score_function}Illustration of score function $\nabla\log q(x)$ plotted as black rows (right) of a general probability distribution $q(x)$ (left).}
+\end{wrapfigure}
+So far, the central object of interest for our investigation was a vector field $u_t(x)$. Diffusion models \citep{song2020score, song2021sde} take a different perspective focused on \textbf{score functions}. Therefore, in this section, we will rephrase what we have learned here in the language of score functions - providing a novel perspective. Let $q(x)$ be an arbitrary probability distribution. Then the \themebf{score function} of $q$ is defined as $\nabla\log q(x)$, i.e. as the gradient of the log-likelihood of $q$ with respect to $x$. The score has an intuitive meaning: $\nabla\log q(x)$ is the direction of steepest ascent with respect to log-likelihood. This is illustrated in \cref{fig:score_function}.
+
+Let us return to the setting of conditional probability paths $p_t(x|z)$ and marginal probability paths $p_t(x)$ as in \cref{sec:flow_matching}. Then we can equivalently define the \themebf{conditional score function} as $\nabla\log p_t(x|z)$ and the \themebf{marginal score function} as $\nabla\log p_t(x)$. Similar to \cref{eq:marginal_vector_field}, the marginal score can be expressed via the conditional score function $\nabla \log p_t(x|z)$ via
+\begin{align}
+\label{e:marginal_score}
+\nabla\log p_t(x)
+=\int \nabla \log p_t(x|z)\frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z.
+\end{align}
+Hence, \textbf{the relation between the conditional and marginal score is analogous to the relation between the conditional and marginal vector field}. Note that we can prove \cref{e:marginal_score} via
+\begin{align}
+\nabla\log p_t(x) = \frac{\nabla p_t(x)}{p_t(x)}
+=\frac{\nabla \int p_t(x|z)\pdata(z)\dd z}{p_t(x)}
+=\frac{\int \nabla p_t(x|z)\pdata(z)\dd z}{p_t(x)}
+=\int \nabla \log p_t(x|z)\frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z,
+\end{align}
+where we have used the rule $\partial_{y} \log y=1/y$ combined with the chain rule twice.
+
+\begin{examplebox}[Score Function for Gaussian Probability Paths.] 
+For the Gaussian path $p_t(x|z)=\mathcal{N}(x;\alpha_t z,\beta_t^2 I_d)$, we can use the form of the Gaussian probability density (see \cref{e:gaussian}) to get
+\begin{align}
+\label{eq:cond_score_gaussian}
+    \nabla \log p_t(x|z) = \nabla\log \mathcal{N}(x;\alpha_t z,\beta_t^2 I_d) = -\frac{x-\alpha_t z}{\beta_t^2}.
+\end{align}
+\end{examplebox}
+
+Note that the score function for a Gaussian probability path is a linear function of $x$ and z. The same is true for the conditional vector field $u_t(x|z)$ (see \cref{eq:conditional_gaussian_vf}). It is thus possible to convert between the two, as the next proposition illustrates.
+\begin{proposition}[Conversion Formula for Gaussian Probability Paths]
+\label{prop:conversion_formula_gaussian_prob_path}
+For the Gaussian probability path $p_t(x|z)=\mathcal{N}(\alpha_t z,\beta_t^2 I_d)$, the conditional (resp. marginal) vector field and the conditional (resp. marginal) score are related by the following identities
+\begin{align}
+\uref_t(x|z)=&a_t\nabla\log p_t(x|z)+b_tx,\quad a_t=\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t\right),\quad b_t=\frac{\dot{\alpha}_t}{\alpha_t} \label{eq:reparam_cond}\\
+\uref_t(x)=&a_t\nabla\log p_t(x)+b_tx. \label{eq:reparam_uncond}
+\end{align}
+In particular, we note that the conditional (resp. marginal) vector field can be recovered from the conditional (resp. marginal) score, and vice versa.
+\end{proposition}
+\begin{proof}
+For the conditional vector field and conditional score, we can derive:
+\begin{align*}
+\uref_t(x|z)=&\left(\dot{\alpha}_t-\frac{\dot{\beta}_t}{\beta_t}\alpha_t\right)z+\frac{\dot{\beta}_t}{\beta_t}x
+\overset{(i)}{=}\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t\right)\left(\frac{\alpha_tz-x}{\beta_t^2}\right)+\frac{\dot{\alpha}_t}{\alpha_t}x=\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t\right)\nabla\log p_t(x|z)+\frac{\dot{\alpha}_t}{\alpha_t}x
+\end{align*}
+where in $(i)$ we just did some algebra. By taking integrals, the same identity holds for the marginal flow vector field and the marginal score function:
+\begin{align*}
+\uref(x)= \int \uref_t(x|z)\frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z
+=&\int\left[a_t\nabla\log p_t(x|z)+b_tx\right] \frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z\\
+\overset{(i)}{=}&a_t\nabla\log p_t(x)+b_tx
+\end{align*}
+where in $(i)$ we used \cref{e:marginal_score} and the fact that posterior density integrates to $1$.
+\end{proof}
+\Cref{prop:conversion_formula_gaussian_prob_path} is striking because it says that once we've learned $\uref_t$ we've also learned the  score function $\nabla\log p_t(x)$, and vice versa. Therefore, many diffusion models learn the score function $\nabla\log p_t(x)$ instead via a neural network. We will discuss this in \cref{subsec:score_matching}.
+\begin{remarkbox}[Reparameterization of the Score]
+The reparameterization formula for Gaussian probability paths in \cref{eq:reparam_cond} is possible because both sides (conditional vector field and conditional score) are \emph{linear} functions of $x$ and $z$. Once we marginalize (marginal vector field and marginal score), both sides are just a linear reparameterization of the posterior mean $\EE_{z|x}\left[z\right]$. It follows that any quantity that allows to recover $\EE_{z|x}\left[z\right]$ can in turn be used to recover the unconditional vector field and score. Further, doing so might even be preferable from a numerical/training stability standpoint. One common choice is the posterior mean itself, often referred to as the \textit{denoiser}. Formally, we define the \themebf{conditional and marginal denoiser} as
+\begin{align}
+\label{e:denoiser}
+    D_t(x|z)=z, \quad 
+D_t(x)
+=\int z\,\frac{ p_t(x|z)\pdata(z)}{p_t(x)}\dd z \overset{(i)}{=} \frac{1}{\dot{\alpha}_t\beta_t-\alpha_t\dot{\beta}_t}(\beta_t \uref_t(x_t)-\dot{\beta}_tx_t).
+\end{align}
+Here, $(i)$ follows from an equivalent derivation as in \cref{prop:conversion_formula_gaussian_prob_path}. The denoiser has a very intuitive interpretation: it is the expected value of clean data $z$ given noisy data $x$.\footnote{Food for thought: will the denoiser always output a ``clean'' data point? Why or why not, and what might this depend on?} People often call such models \themebf{denoising diffusion models} as learning $D_t$ and learning $\uref_t$ are theoretically equivalent.
+\end{remarkbox}
+
+
+\subsection{Sampling with SDEs}
+
+\begin{figure}[t!]
+\centering
+   \begin{subfigure}[b]{\textwidth}
+   \centering
+   \includegraphics[width=\textwidth]{figures/conditional_sde.png}
+   \label{fig:Ng1} 
+\end{subfigure}
+\begin{subfigure}[b]{\textwidth}
+    \centering
+   \includegraphics[width=\textwidth]{figures/marginal_sde.png}
+\end{subfigure}
+\caption{\label{fig:thm_sde_extension}Illustration of \cref{thm:langevin_trick}. Simulating a probability path with SDEs. This repeats the plots from \cref{fig:cond_marginal_path_simulation} with SDE sampling using \cref{eq:sde_extension}. Data distribution $\pdata$ in blue background. Gaussian $\pinit$ in red background. Top row: Conditional path. Bottom row: Marginal probability path. As one can see, the SDE transports samples from $\pinit$ into samples from $\delta_{z}$ (for the conditional path) and to $\pdata$ (for the marginal path).}
+\end{figure}
+
+So far, we have demonstrated how one can construct a trajectory $X_t$ of an ODE that follows a desired probability path $p_t$ via a marginal vector field $\uref_t$. But this approach is constrained to flow models. What about diffusion models? Using score functions, let us now extend this result to SDEs.
+\begin{theorem}[SDE Extension Trick]
+\label{thm:langevin_trick}
+Define the conditional and marginal vector fields $\uref_t(x|z)$ and $\uref_t(x)$ as before. Then, for any diffusion coefficient $\sigma_t\geq 0$, we may construct an SDE by adding \textcolor{ForestGreen}{stochastic dynamics} to the dynamics of the \textcolor{RoyalBlue}{original ODE} as follows:
+\begin{alignat}{2}
+\label{eq:sde_extension}
+X_0 &\sim \pinit,\qquad & \dd X_t
+  &=\textcolor{RoyalBlue}{\uref_t(X_t)\dd t} + \textcolor{ForestGreen}{\frac{\sigma_t^2}{2}\nabla\log p_t(X_t)\dd t
+    + \sigma_t\dd W_t} \\
+&&
+&=\Big[\textcolor{RoyalBlue}{\uref_t(X_t)}+\textcolor{ForestGreen}{\frac{\sigma_t^2}{2}\nabla\log p_t(X_t)}\Big]\dd t
+    + \textcolor{ForestGreen}{\sigma_t}\dd W_t \notag \\
+\label{eq:marginal_ode_follows_marginal_path_sde}
+\Rightarrow\quad X_t &\sim p_t\quad (0\le t\le 1). &&
+\end{alignat}
+
+In particular, $X_1\sim \pdata$ for this SDE. We note that the \textcolor{ForestGreen}{stochastic dynamics} are closely related to the \themebf{Langevin dynamics}, and can be thought of as injecting noise while preserving the marginal distribution $p_t$. We discuss Langevin dynamics briefly in \cref{remark:langevin}.
+\end{theorem}
+
+We illustrate the dynamics described in \cref{thm:langevin_trick} in \cref{fig:thm_sde_extension}. As one can see, the trajectories are now zig-zagged, illustrating the stochastic nature of the SDE's evolution. As \cref{thm:langevin_trick} establishes however, the marginals $p_t$ stay the same. Note that the above result is striking in that we can choose \emph{any} diffusion coefficient $\sigma_{t}\geq 0$ even after having trained the networks. In theory, \cref{thm:langevin_trick} holds for any choice of $\sigma_t$. However, \emph{in practice}, we suffer from both \textit{training error} (the neural network does not perfectly approximate the marginal vector field and score) and simulation error (e.g. for $\sigma_{t}\gg0$, we would need to take prohibitively small step sizes in \cref{alg:sampling_diffusion_model}). In practice, for a fixed trained model, there is then an optimal $\sigma_{t}\geq 0$ which can be empirically determined \citep{karras2022elucidating, albergo2023stochastic, ma2024sit}.\footnote{Again, we stress that the existence of a ``best $\sigma_t$'' is an artifact of imperfectly trained models and finite compute budgets rather than a theoretical statement about the dynamics in their continuous limit.}
+
+For Gaussian probability paths, we get the score function for free by having learned the marginal vector field. 
+\begin{examplebox}[Gaussian SDE Extension Trick]
+    By \cref{prop:conversion_formula_gaussian_prob_path}, for Gaussian probability paths, we can express the SDE from \cref{thm:langevin_trick} purely using score functions:
+\begin{align}
+\label{eq:sde_extension_gaussian}
+    X_0\sim&\,\pinit,\quad \dd X_t =\left[\left(a_t+\frac{\sigma_t^2}{2}\right)\nabla\log p_t(X_t)+b_tX_t\right]\dd t +\sigma_t\dd W_t\\
+\label{eq:marginal_ode_follows_marginal_path_sde_gaussian}
+    \Rightarrow X_t\sim& \,p_t\quad (0\leq t\leq 1)
+\end{align}
+where $a_t,b_t$ are defined as in \cref{prop:conversion_formula_gaussian_prob_path}.
+\end{examplebox}
+
+
+In the remainder of this section, we will prove  \cref{thm:langevin_trick} via the \themebf{Fokker-Planck equation}, which extends the continuity equation from ODEs to SDEs. To do so, let us first define the \themebf{Laplacian} operator $\Delta$ via
+\begin{align}
+    \label{eq:laplacian_definition}
+    \Delta w_t(x)=&\sum\limits_{i=1}^{d}\frac{\partial^2}{\partial x_i^2}w_t(x)=\divv(\nabla w_t)(x),
+\end{align}
+for scalar field $w_t:\R^d\to\R$.
+\begin{theorem}[Fokker-Planck Equation]
+\label{thm:fokker_planck}
+Let $p_t$ be a probability path and let us consider the SDE
+\begin{align*}
+    X_0\sim \pinit, \quad \dd X_t = u_t(X_t)\dd t + \sigma_t\dd W_t.
+\end{align*}
+Then $X_t$ has distribution $p_t$ for all $0\leq t\leq 1$ if and only if the \themebf{Fokker-Planck equation} holds:
+    \begin{align}
+    \label{e:fokker_planck}
+    \partial_t p_t(x) = -\divv (p_t u_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t (x)\quad \text{ for all }x\in\R^d, 0\leq t\leq 1,
+    \end{align}     
+\end{theorem}
+A self-contained proof of the Fokker-Planck equation can be found in \cref{subsec:proof_fokker_planck}. Note that \cref{thm:continuity_equation} is recovered from the Fokker-Planck equation when $\sigma_t=0$. The additional Laplacian term $\Delta p_t$ might be hard to rationalize at first. Those familiar with physics will note that the same term also appears in the heat equation (which is in fact a special case of the Fokker-Planck equation). Heat diffuses through a medium. We also add a diffusion process (not a physical but a mathematical one) and hence we add this additional Laplacian term. 
+Let us now use the Fokker-Planck equation to help us prove \cref{thm:langevin_trick}.
+
+\begin{proof}[Proof of \Cref{thm:langevin_trick}]
+ By \cref{thm:fokker_planck}, we need to show that that the SDE defined in \cref{eq:sde_extension} satisfies the Fokker-Planck equation for $p_t$. We can do this by direction calculation:
+\begin{align*}
+    \partial_t p_t(x) \overset{(i)}{=}& - \divv(p_t\uref_t)(x)\\
+    \overset{(ii)}{=}& - \divv(p_t\uref_t)(x) -\frac{\sigma_t^2}{2}\Delta p_t(x)+\frac{\sigma_t^2}{2}\Delta p_t(x)\\
+    \overset{(iii)}{=}& - \divv(p_t\uref_t)(x) -\divv(\frac{\sigma_t^2}{2}\nabla p_t)(x)+\frac{\sigma_t^2}{2}\Delta p_t(x)\\
+    \overset{(iv)}{=}& - \divv(p_t\uref_t)(x) -\divv(p_t\left[\frac{\sigma_t^2}{2}\nabla \log p_t\right])(x)+\frac{\sigma_t^2}{2}\Delta p_t(x)\\
+    \overset{(v)}{=}&- \divv\left(p_t\left[\uref_t+\frac{\sigma_t^2}{2}\nabla \log p_t\right]\right)(x)+\frac{\sigma_t^2}{2}\Delta p_t(x),
+\end{align*}
+where in $(i)$ we used \cref{thm:continuity_equation}, in $(ii)$ we added and subtracted the same term, in $(iii)$ we used the definition of the Laplacian (\cref{eq:laplacian_definition}), in $(iv)$ we used that $\nabla\log p_t=\frac{\nabla p_t}{p_t}$, and in $(v)$ we used the linearity of the divergence operator. The above derivation shows that the SDE defined in \cref{eq:sde_extension} satisfies the Fokker-Planck equation for $p_t$. By \cref{thm:fokker_planck}, this implies $X_t\sim p_t$ for $0\leq t\leq 1$, as desired.
+\end{proof}
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/langevin.png}
+    \label{fig:langevin}
+    \caption{Top row: Particles evolving under the Langevin dynamics given by \cref{eq:langevin_dynamics}, with $p(x)$ taken to be a Gaussian mixture with 5 modes. Bottom row: A kernel density estimate of the same samples shown in the top row. As one can see, the distribution of samples converges to the equilibrium distribution $p$ (blue background colour).}
+\end{figure}
+\begin{remarkbox}[Optional: Langevin Dynamics]
+\label{remark:langevin}
+The above construction has a famous special case when the probability path is constant, i.e. $p_t=p$ for a fixed distribution $p$. In this case, we set $\uref_t=0$ and obtain the SDE
+\begin{equation}
+    \dd X_t = \frac{\sigma_t^2}{2}\nabla\log p(X_t)\dd t + \sigma_t dW_t \label{eq:langevin_dynamics},
+\end{equation}
+which is commonly known as \themebf{Langevin dynamics}. The fact that $p_t$ is constant implies that $\partial_tp_t(x)=0$. It follows immediately from \cref{thm:langevin_trick} that these dynamics satisfy the Fokker-Planck equation for the static path $p_t=p$ in \cref{thm:langevin_trick}. Therefore, we may conclude that $p$ is a stationary distribution of Langevin dynamics:
+\begin{align*}
+    X_0 \sim p\quad \Rightarrow \quad X_t \sim p\quad (t\geq 0).
+\end{align*}
+As with many Markov processes, these dynamics converge to the stationary distribution $p$ under rather general conditions. That is, if we instead we take $X_0 \sim p' \neq p$, so that $X_t \sim p_t'$, then under mild conditions $p_t \to p$. This fact makes Langevin dynamics extremely useful, and it accordingly serves as the basis for e.g., \textbf{molecular dynamics} simulations, and many other Markov chain Monte Carlo (MCMC) methods across Bayesian statistics and the natural sciences. In particular, the Ornstein-Uhlenbeck processes are recovered as the special case of the Langevin dynamics when $p$ is a Gaussian, and serve as the basis for initial formulations of diffusion models. 
+% The Langevin dynamics also have elegant connections to the theories of gradients flows and optimal transport, both of which are beyond the scope of these notes.
+\end{remarkbox}
+\begin{remarkbox}[Optional: GLASS Flows, Stochastic evolution with ODEs]
+The remarkable property of SDE sampling (compared to ODEs) is that the evolution becomes stochastic, i.e. the initial point $X_0$ does not fully determine $X_t$ for $t>0$. Perhaps surprisingly, it is also possible to get the same stochastic transitions purely via ODEs via a simple sampling trick called 
+\emph{GLASS Flows} \citep{holderrieth2025glass}. This allows to exploit the stochastic nature of SDEs (e.g. via search algorithms) while keeping the efficiency of ODEs.
+\end{remarkbox}
+\subsection{Score Matching}
+\label{subsec:score_matching}
+It remains to show how we can learn the marginal score function $\nabla\log p_t(x)$. Of course, for Gaussian probability paths, we can simply transform $\uref_t(x)$ by \cref{prop:conversion_formula_gaussian_prob_path}. However, what about in general? It turns out that we can also learn marginal score functions directly. To approximate the marginal score $\nabla\log p_t$, we use a neural network that we call \themebf{score network} $s_t^\theta:\mathbb{R}^d\times[0,1]\to\mathbb{R}^d$. In the same way as before, we can design a \themebf{score matching} loss and a \themebf{denoising score matching} loss:
+\begin{align*}
+    \mathcal{L}_{\text{SM}}(\theta) &=\mathbb{E}_{t\sim\text{Unif},\,z\sim \pdata,\, x\sim p_t(\cdot|\dap)}\left[\left\|s_t^\theta(x) - \nabla\log p_t(x)\right\|^2\right] &&\blacktriangleright\,\,\text{score matching loss}\\
+    \mathcal{L}_{\text{CSM}}(\theta) &=\mathbb{E}_{t\sim\text{Unif},\,z\sim \pdata,\, x\sim p_t(\cdot|\dap)}\left[\left\|s_t^\theta(x) - \nabla\log p_t(x|\dap)\right\|^2\right]  &&\blacktriangleright\,\,\text{conditional score matching loss}
+\end{align*}
+where again the difference is using the marginal score $\nabla\log p_t(x)$ vs. using the conditional score $\nabla\log p_t(x|z)$. %\footnote{It would be more consistent to call it \emph{conditional} score matching loss but \emph{denoising} score matching is a term used in the literature. We will realize later why it is called \emph{denoising} score matching.} 
+As before, we ideally would want to minimize the score matching loss but can't because we don't know $\nabla\log p_t(x)$. But similarly as before, the denoising score matching loss is a tractable alternative:
+\begin{theorem}
+\label{thm:dsm_loss}
+The score matching loss equals the denoising score matching loss up to a constant:
+\begin{align*}
+\mathcal{L}_{\text{SM}}(\theta) = \mathcal{L}_{\text{CSM}}(\theta) + C,
+\end{align*}
+where $C$ is independent of parameters $\theta$. Therefore, their gradients coincide:
+\begin{align*}
+\nabla_\theta \mathcal{L}_{\text{SM}}(\theta) = \nabla_\theta \mathcal{L}_{\text{CSM}}(\theta).
+\end{align*}
+In particular, for the minimizer $\theta^*$, it will hold that $s_t^{\theta^*}=\nabla\log p_t$. 
+\end{theorem}
+\begin{proof}
+Note that the formula for $\nabla\log p_t$ (\cref{e:marginal_score}) looks the same as the formula for $\uref_t$ (\cref{eq:marginal_vector_field}). Therefore, the proof is identical to the proof of \cref{thm:fm_loss} replacing $\uref_t$ with $\nabla\log p_t$.
+\end{proof}
+% The above procedure describes the vanilla procedure of training a diffusion model. After training, we can choose an arbitrary diffusion coefficient $\sigma_t\geq 0$ and then simulate the SDE
+% \begin{align}
+% \label{eq:sde_extension_restated}
+%     X_0\sim&\pinit,\quad \dd X_t =\left[u_t^\theta(X_t)+\frac{\sigma_t^2}{2}s_t^\theta(X_t)\right]\dd t +\sigma_t\dd W_t,
+% \end{align}
+% to generate samples $X_1\sim\pdata$. In theory, every $\sigma_t$ should give samples $X_1\sim \pdata$ at perfect training. In practice, we encounter two types of errors: (1) numerical errors by simulating the SDE imperfectly and (2) training errors (i.e., the model $u_t^{\theta}$ is not exactly equal to $\uref_t$). Therefore, there is an optimal unknown noise level $\sigma_t$ - this can be determined empirically by just testing our different values of empirically (see e.g. \citep{albergo2023stochastic,karras2022elucidating,ma2024sit}). At first sight, it might seem to be a disadvantage that we have to learn both $s_t^\theta$ and $u_t^\theta$ if we wanted to use diffusion model now as opposed to a flow model. However, note we can often directly $s_t^\theta$ and $u_t^\theta$ in a single network with two outputs, so that the additional computational effort is usually minimal. Further, as we will see now for the special case of the Gaussian probability path, $s_t^\theta$ and $u_t^\theta$ may be converted into one another so that we don't have to train them separately.
+
+% \begin{remarkbox}[Denoising Diffusion Models]If you are familiar with diffusion models, you have probably encountered the term \themebf{\textit{denoising} diffusion model}. This model has become so popular that most people nowadays drop the word "denoising" and simply use the term "diffusion model" to describe it. In the language of this document, these are simply diffusion models with Gaussian probability paths $p_t(\cdot|z)=\mathcal{N}(\alpha_t z;\beta_t^2 I_d)$. However, it is important to note that this might not be immediately obvious if you read some of the first diffusion model papers: they use a different time convention (time is inverted) - so you need apply an appropriate time re-scaling - and they construct their probability path via so-called \textbf{forward processes} (we will discuss this in \cref{subsec:guide_to_flow_matching_literature}).
+% \end{remarkbox}
+
+\begin{examplebox}[Denoising Diffusion Models: Score Matching for Gaussian Probability Paths]
+Let us instantiate the denoising score matching loss for the case of $p_t(x|z)=\mathcal{N}(\alpha_tz,\beta_t^2I_d)$. As we derived in \cref{eq:cond_score_gaussian}, the conditional score $\nabla\log p_t(x|z)$ has the formula
+\begin{align}
+\label{e:marginal_vf_cond_score_restated}
+    \nabla\log p_t(x|z) = -\frac{x-\alpha_t z}{\beta_t^2}.
+\end{align}
+Plugging in this formula, the conditional score matching loss becomes:
+\begin{align*}
+        \mathcal{L}_{\text{CSM}}(\theta) &=\mathbb{E}_{t\sim\Unif,\,z\sim \pdata,\,x\sim p_t(\cdot|\dap)}\left[\left\|s_t^\theta(x)+\frac{x-\alpha_t z}{\beta_t^2}\right\|^2\right]\\&\overset{(i)}{=}\mathbb{E}_{t\sim\Unif,\,z\sim \pdata,\,\epsilon\sim \mathcal{N}(0,I_d)}\left[\left\|s_t^\theta(\alpha_tz+\beta_t\epsilon)+\frac{\epsilon}{\beta_t}\right\|^2\right]\\
+        &=\mathbb{E}_{t\sim\Unif,\,z\sim \pdata,\,\epsilon\sim \mathcal{N}(0,I_d)}\left[\frac{1}{\beta_t^2}\left\|\beta_ts_t^\theta(\alpha_tz+\beta_t\epsilon)+\epsilon\right\|^2\right]
+\end{align*}
+where in $(i)$ we plugged in \cref{eq:sampling_procedure_gaussian_path_restated_for_fm} and replaced $x$ by $\alpha_tz+\beta_t\epsilon$. Note that the network $s_t^\theta$ essentially learns to predict the noise that was used to corrupt a data sample $z$. This explains why the above training loss is  called \themebf{denoising score matching}. It was soon realized that the above loss is numerically unstable for $\beta_t\approx 0$ close to zero (i.e. denoising score matching only works if you add a sufficient amount of noise). In some of the first works on denoising diffusion models (see \textbf{Denoising Diffusion Probabilitic Models}, \citep{ho2020denoising}) it was therefore proprosed to drop the constant $\frac{1}{\beta_t^2}$ in the loss and reparameterize $s_t^\theta$ into a \themebf{noise predictor} network $\epsilon_t^\theta:\mathbb{R}^d\times[0,1]\to\mathbb{R}^d$ via:
+\begin{align*}
+    -\beta_t s_t^\theta(x) = \epsilon_t^\theta(x)\quad \Rightarrow \quad \mathcal{L}_{\text{DDPM}}(\theta) =&\mathbb{E}_{t\sim\Unif,z\sim \pdata, \epsilon\sim \mathcal{N}(0,I_d)}\left[\|\epsilon_t^\theta(\alpha_tz+\beta_t\epsilon)-\epsilon\|^2\right]
+\end{align*}
+As before, the network $\epsilon_t^\theta$ essentially learns to predict the noise that was used to corrupt a data sample $z$. In \cref{alg:training_score_matching_gaussian_paths}, we summarize the training procedure.
+\end{examplebox}
+
+\begin{algorithm}[h]
+\caption{Score Matching Training Procedure for Gaussian probability path}
+\label{alg:training_score_matching_gaussian_paths}
+\begin{algorithmic}[1]
+\REQUIRE A dataset of samples $z\sim \pdata$, score network $s_t^\theta$ or noise predictor $\epsilon_t^\theta$
+\FOR{each mini-batch of data}
+    \STATE Sample a data example $\dap$ from the dataset.
+    \STATE Sample a random time $t \sim \text{Unif}_{[0,1]}$.
+    \STATE Sample noise $\epsilon\sim\mathcal{N}(0,I_d)$
+    \STATE Set $x_t=\alpha_t z + \beta_t\epsilon$\hfill (\text{General case: }$x_t\sim p_t(\cdot|z)$)
+    %\IF{Flow matching}
+    \STATE Compute loss
+    \begin{align*}
+        \mathcal{L}(\theta) =& \|s_t^\theta(x_t)+\frac{\epsilon}{\beta_t}\|^2 \quad &(\text{General case: }=\|s_t^\theta(x_t)-\nabla\log p_t(x_t|z)\|^2)\\
+    \text{Alternatively: }\mathcal{L}(\theta) =& \|\epsilon_t^\theta(x_t)-\epsilon\|^2
+    \end{align*}
+    %\ENDIF
+    % \IF{Score matching}
+    % \STATE
+    % \begin{align*}
+    %     \mathcal{L}(\theta) =& \|s_t^\theta(x_t)+\frac{\epsilon}{\beta_t}\|^2 \quad &(\text{General case: }=\|s_t^\theta(x_t)+\nabla\log p_t(x_t|z)\|^2)
+    % \end{align*}
+    % \ENDIF
+    \STATE Update the model parameters $\theta$ via gradient descent on $\mathcal{L}(\theta)$.
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+% \begin{figure}[!h]
+%     \centering
+%     \includegraphics[width=\linewidth]{figures/score_field_comparison.png}
+%     \caption{\label{fig:score_fields}A comparison of the score, as obtained in two different ways. Top: A visualization of the score field $s_t^\theta(x)$ learned independently with score matching (see \cref{alg:training_score_matching_gaussian_paths}). Bottom: A visualization of the score field $\tilde{s}_t^\theta(x)$ parameterized using $u_t^\theta(x)$ as in \cref{eq:marginal_vf_to_score_formula}.}
+% \end{figure}
+% We can use the conversion formula to parameterize the score network $s_t^\theta$ and the vector field network $u_t^\theta$ into one another via 
+% \begin{align}
+% u_t^\theta=\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t\right)s_t^\theta(x)+\frac{\dot{\alpha}_t}{\alpha_t}x.
+% \label{eq:marginal_score_to_vf_formula}
+% \end{align}
+% Similarly, so long as $\beta_t^2\dot{\alpha}_t -\alpha_t\dot{\beta}_t\beta_t \neq 0$ (always true for $t \in [0,1)$), it follows that
+% \begin{align}
+% s_t^\theta(x) = \frac{\alpha_t u_t^\theta(x) - \dot{\alpha}_tx}{\beta_t^2\dot{\alpha}_t -\alpha_t\dot{\beta}_t\beta_t}.
+% \label{eq:marginal_vf_to_score_formula}
+% \end{align}
+% Using this parameterization, it can be shown that the denoising score matching and the conditional flow matching losses are the same up to a constant. We conclude that \textbf{for Gaussian probability paths there is no need to separately train both the marginal score and the marginal vector field, as knowledge of one is sufficient to compute the other. In particular, we can choose whether we want to use flow matching or score matching to train it}. In \cref{fig:score_fields}, we compare visually the score as approximated using score matching and the parameterized score using \cref{eq:marginal_vf_to_score_formula}. If we have trained a score network $s_t^\theta$, we know by \cref{eq:sde_extension_restated} that we can use arbitrary $\sigma_t\geq 0$ to sample from the SDE
+% \begin{align}
+%     X_0\sim&\pinit,\quad \dd X_t =\left[\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t+\frac{\sigma_t^2}{2}\right)s_t^\theta(x)+\frac{\dot{\alpha}_t}{\alpha_t}x\right]\dd t +\sigma_t\dd W_t
+% \end{align}
+% to obtain samples $X_1\sim \pdata$ (up to training and simulation error). This corresponds to \themebf{stochastic sampling from a denoising diffusion model.}
+
+
+% \subsection{Primer: How to learn conditional expectations}
+% We start off by a reminder about some fundamental statistics. Specifically, we briefly discuss on how to approximate (conditional) expectations of some random variables by using the mean squared error.
+
+% \paragraph{Learning an average.} Let us assume that $Z\in\mathbb{R}^k$ is a random variable. Imagine that we want to find the vector $\mathbb{E}[Z]\in\mathbb{R}^k$ given the expected value of $Z$. We can frame this as the following minimization problem of the \themebf{mean squared error}:
+% \begin{align}
+% \label{eq:average_as_minimization}
+%     \mathbb{E}_{Z}[Z] = \argmin\limits_{v\in\mathbb{R}^k}\mathbb{E}_{Z}[\|Z-v\|^2]
+% \end{align}
+% In other words, the best constant guess $v$ of $Z$ as measured by the mean-squared error is the expected value of $Z$. To see that the above holds, one can do the following calculation for an arbitrary $v$
+% \begin{align*}
+%     \mathbb{E}[\|Z-v\|^2] =& \mathbb{E}[\|(Z-\mathbb{E}[Z])+(\mathbb{E}[Z]-v)\|^2]\\
+% \overset{(i)}{=}&\mathbb{E}[\|Z-\mathbb{E}[Z]\|^2+2(Z-\mathbb{E}[Z])^T(\mathbb{E}[Z]-v)]+\|\mathbb{E}[Z]-v\|^2]\\
+% \overset{(ii)}{=}&\mathbb{E}[\|Z-\mathbb{E}[Z]\|^2]+2(\mathbb{E}[Z]-\mathbb{E}[Z])^T(\mathbb{E}[Z]-v)+\|\mathbb{E}[Z]-v\|^2\\
+% =&\mathbb{E}[\|Z-\mathbb{E}[Z]\|^2]+\|\mathbb{E}[Z]-v)\|^2\\
+% \geq & \mathbb{E}[\|Z-\mathbb{E}[Z]\|^2]
+% \end{align*}
+% where in $(i)$ we used that identity $\|a+b\|^2=\|a\|^2+2a^Tb+\|b\|^2$ and $(ii)$ we used the fact that the expected value is linear. The last inequality becomes an equality if and only if $v=\mathbb{E}[Z]$. This proves \cref{eq:average_as_minimization}.
+
+
+% \paragraph{Learning a conditional average.} Let us now imagine that we have two random variables $X\in\mathbb{R}^d,Z\in\mathbb{R}^k$ jointly sampled (i.e. they might be coupled). Let us imagine that we know that $X=x$ and we want to estimate $Z$. Naturally, in machine learning we would choose a parameterized function $F^\theta:\mathbb{R}^d\to\mathbb{R}^k$ (usually $F^\theta$ is a neural network) and then minimize the mean square error
+% \begin{align*}
+%     L(\theta) =& \mathbb{E}_{X,Z}[\|F^\theta(X)-Z\|^2]
+% \end{align*}
+% We can 
+% \begin{align*}
+%     L(\theta) =& \mathbb{E}_{X}[\mathbb{E}[\|F^\theta(X)-Z\|^2|X]]
+% \end{align*}
+% The best estimate is given by the \themebf{conditional expectation} 
+% \begin{align*}
+%     F^{\theta^*} = \mathbb{E}[Z|X=x]
+% \end{align*}
+% Note that the conditional expectation is a function of $x$. How would we approximate it?
+% Therefore, we learnt: \textbf{training a neural network by minimizing a mean squared error results in the neural network approximating the conditional expectation.}
+
+%\subsection{Training Algorithm}
+
+
+
+% Denoising diffusion models use a different time convention: First, they use an \themebf{inverted time convention} where time $t=0$ corresponds $\pdata$ and the distribution for $t\to \infty$ is approximately Gaussian. As we have seen in \cref{subsec:diffusion_reference_construction}, diffusion models construct the probability path via a "forward/noising" process and the time-reversal of that process serves as the reference model. As we have seen, this is an equivalent, less general construction. Personally, I found the difference in this convention to flow matching often very confusing. This is unfortunate but very important to keep in mind.
+
+% \paragraph{Stochastic interpolants - \citep{albergo2023stochastic}.} The framework of \themebf{stochastic interpolants (SIs)} is another popular way of constructing generative models via SDEs. It is essentially the framework presented here with a reference SDE constructed via a flow model and a score Langevin model added on top. The name for SI is inspired by the method used in the SI framework to construct probability paths $p_t$. Specifically, the SI framework takes a sample-based perspective, i.e. the marginal probability path $p_t$ is constructed implicitly via a \themebf{interpolant function} $I$. Specifically, let $I:[0,1]\times \mathbb{R}^d\times \mathbb{R}^d\to \mathbb{R}^d$ be a differentiable function such that $I(0,x,z)=x$, $I(1,x,z)=z$ for all $x,z\in \mathbb{R}^d$ and $\gamma:[0,1]\to\mathbb{R}_{>0}$ be such that $\gamma(0)=\gamma(1)=0$. Then define the probability paths implicitly via:
+% \begin{align}
+% \label{eq:stochastic_interpolant}
+% \textbf{Conditional probability path: } &I(t,x,z) + \gamma(t)\epsilon \sim p_t(\cdot|z)\quad (x\sim \pinit, \epsilon\sim \mathcal{N}(0,I_d), \text{ fixed }z)\\
+% \textbf{Marginal probability path: }&I(t,x,z) + \gamma(t)\epsilon \sim p_t,\quad (x\sim \pinit, \epsilon\sim \mathcal{N}(0,I_d), z\sim \pdata)
+% \end{align}
+% By the conditions we imposed on $I,\gamma$, we know that $p_t,p_t(\cdot|z)$ are valid interpolating conditional/marginal probability paths.
+
+Let us summarize the results of this section:
+\begin{summarybox}[Score Functions, Score Matching, and Stochastic Sampling]
+Let $p_t(x|z),p_t(x)$ be the conditional and marginal probability path. The \themebf{conditional score function} is given by $\nabla\log p_t(x|z)$ and the \themebf{marginal score function} is given by $\nabla\log p_t(x)$. For every diffusion coefficient $\sigma_{t}\geq 0$, the trajectories of the following SDE follow the probability path:
+\begin{align}
+\label{eq:sde_extension_restated}
+X_0\sim&\pinit,\quad \dd X_t =\left[\uref_t(X_t)+\frac{\sigma_t^2}{2}\nabla\log p_t(X_t)\right]\dd t +\sigma_t\dd W_t\\
+    \Rightarrow X_t\sim& p_t\quad (0\leq t\leq 1),
+\end{align}
+where is $\uref_t(x)$ be the marginal vector field as before (see \cref{eq:marginal_vector_field}).
+
+\paragraph{Score Matching.} To learn the marginal score function $\nabla\log p_t(x)$, we can use a \themebf{score network} $s_t^\theta$ and train it via \themebf{denoising score matching}
+\begin{align}
+    \label{eq:dsm}
+\mathcal{L}_{\text{CSM}}(\theta) &= \mathbb{E}_{z\sim \pdata, \,t\sim \text{Unif},\,x\sim p_t(\cdot|\dap)}[\|s_t^\theta(x) - \nabla\log p_t(x|\dap)\|^2] \quad &(\text{denoising score matching loss})
+\end{align}
+% For every diffusion coefficient $\sigma_t\geq 0$, simulating the SDE (e.g. via \cref{alg:sampling_diffusion_model})
+% \begin{align}
+% \label{eq:sde_sampling_restated_again}
+%     X_0\sim&\pinit,\quad \dd X_t =\left[u_t^\theta(X_t)+\frac{\sigma_t^2}{2}s_t^\theta(X_t)\right]\dd t +\sigma_t\dd W_t
+% \end{align}
+% will result in generating approximate samples from $\pdata$.
+
+\paragraph{Gaussian Probability Paths.} For the - most important -  case of a Gaussian probability path $p_t(x|z)=\mathcal{N}(x;\alpha_tz,\beta_t^2I_d)$, there is no need to train $s_t^\theta$ and $u_t^\theta$ separately as we can convert them via the formula:
+\begin{align*}
+u_t^\theta(x)=&a_t s_t^\theta(x)+b_tx,\quad a_t=\left(\beta_t^2\frac{\dot{\alpha}_t}{\alpha_t}-\dot{\beta}_t\beta_t\right), b_t=\frac{\dot{\alpha}_t}{\alpha_t}
+\end{align*}
+After training, we can simulate the following SDE
+\begin{align}
+X_0\sim\pinit,\quad \dd X_t =&\left[\left(1+\frac{\sigma_{t}^2}{2a_t}\right)u_t^\theta(X_t)-\frac{\sigma_{t}^2b_t}{2a_t}X_t\right]\dd t +\sigma_t\dd W_t\\
+=&\left[\left(a_t+\frac{\sigma_{t}^2}{2}\right)s_t^\theta(X_t)+b_tX_t\right]\dd t +\sigma_t\dd W_t
+\end{align}
+for any diffusion coefficient $\sigma_{t}\geq 0$ 
+to obtain approximate samples $X_1\sim \pdata$. One can empirically find the optimal $\sigma_t\geq 0$.
+\end{summarybox}
+% \paragraph{Adding noise to data.}
+
+% \paragraph{Frame as probability path.}
+
+% \paragraph{How do I go the other way?} Transport mass - using Fokker-Planck equation.
+
+% \paragraph{Weak time-reversal.} Probability flow ODE.
+
+% \paragraph{Adding Langevin dynamics.}
+
+% \paragraph{Special case: Proper time-reversal.}
+
+% \paragraph{Specify marginals via an SDE.} Example of Ohrnstein-Uhlenbeck process.
+
+% Instantaneous Change of Variables (evaluating log-likelihood).
+% Deterministic sampling. Stochastic sampling:
+% Linear ODEs, SDEs with affine drift coefficients, Time-reversal idea.

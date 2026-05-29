@@ -1,0 +1,240 @@
+\ProvidesPackage{notes}[2024/3/14] % based on lindrew.sty
+\ProcessOptions*
+
+\usepackage{graphicx} % Required for inserting images
+\usepackage{todonotes}
+
+
+% Table of Contents 
+\usepackage{minitoc}
+
+
+\usepackage{tocloft}
+\renewcommand{\cfttoctitlefont}{\sffamily\bfseries\Large} % Sans-serif, bold, large font for the title
+
+% Customize the font for section and subsection entries in the table of contents
+\renewcommand{\cftsecfont}{\bfseries\sffamily}       % Sans-serif font for section entries
+\renewcommand{\cftsubsecfont}{\sffamily}   % Sans-serif font for subsection entries
+\renewcommand{\cftsubsubsecfont}{\sffamily}   % Sans-serif font for subsection entries
+
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}} % Add dots for sections
+\setlength{\cftbeforesecskip}{0.5em} % Reduce spacing between lines
+\setlength{\cftsecindent}{0em} % No indentation for sections
+\setlength{\cftsecnumwidth}{2.5em} % Adjust section number width for alignment
+\renewcommand{\contentsname}{} % Remove the "Contents" title
+
+\setcounter{secnumdepth}{3} % Include subsections in numbering
+\setcounter{tocdepth}{3} % Include subsections in ToC
+
+
+\usepackage{changepage} % For locally adjusting margins
+\newcommand{\classname}{MIT Class 6.S184 2025}
+
+
+% Headers
+% --- e-reader geometry (tunable knob for the Ralph loop) ---
+% Small page + unchanged 10pt font => text is large relative to a 6" screen.
+% Kindle Paperwhite 10th gen usable panel ~= 3.573in x 4.826in (257.3x347.5pt).
+\usepackage[paperwidth=3.573in, paperheight=4.826in, includehead, includefoot,
+  heightrounded, margin=0.10in, headsep=2pt, footskip=10pt]{geometry}
+\setlength{\emergencystretch}{3em}  % relieve overfull lines from the narrow column
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead[L]{\rightmark}
+\fancyhead[R]{}
+
+% Titles
+\usepackage{titlesec}
+% \titleformat{\section}
+%     {\sffamily\Large\bfseries}{\thesection}{1em}{}
+% \titleformat{\subsection}
+%     {\sffamily\bfseries}{\thesubsection}{1em}{}
+
+\let\oldsection\section
+\let\oldsubsection\subsection
+\let\oldsubsubsection\subsubsection
+
+\renewcommand{\section}[1]{%
+    \titleformat{\section}{\sffamily\Large\bfseries}{\thesection}{1em}{}                    % No special code after the title
+    \oldsection{#1}                 % Create the section
+}
+
+\renewcommand{\subsection}[1]{%
+    \titleformat{\subsection}{\sffamily\bfseries}{\thesubsection}{1em}{}                    % No special code after the title
+    \oldsubsection{#1}                 % Create the section
+}
+
+\renewcommand{\subsubsection}[1]{%
+    \titleformat{\subsubsection}{\sffamily\bfseries}{\thesubsubsection}{1em}{}                    % No special code after the title
+    \oldsubsubsection{#1}                 % Create the section
+}
+
+\titleformat{\paragraph}[runin]
+  {\normalfont\sffamily\normalsize\bfseries}{\theparagraph}{1em}{}
+
+\newcommand{\bonussection}[1]{%
+    \titleformat{\section}{\sffamily\Large\bfseries}{\thesection^\bigstar}{1em}{}                    % No special code after the title
+    \oldsection{#1}                 % Create the section
+}
+
+\newcommand{\bonussubsection}[1]{%
+    \titleformat{\subsection}{\sffamily\bfseries}{\thesubsection^\bigstar}{1em}{}                    % No special code after the title
+    \oldsubsection{#1}                 % Create the section
+}
+
+% Put \textbf in sans serif
+\let\oldtextbf\textbf
+\renewcommand{\textbf}[1]{\oldtextbf{\sffamily #1}}
+
+\usepackage{amsmath,pict2e}
+
+\newcommand{\hide}{}
+
+\usepackage{amsmath, amssymb, amsthm} % standard
+\usepackage{bbm} % blackboard bold math
+
+% Colors
+\newcommand{\setcolortheme}[1]{\def\colortheme{#1}}
+\newcommand{\themebf}[1]{{\sffamily \textcolor{\colortheme}{\textbf{#1}}}}
+\newcommand{\themeit}[1]{\textit{#1}}
+\setcolortheme{MidnightBlue}
+
+% Create a command that bolds and colors text using the defined color theme
+\PassOptionsToPackage{colorlinks}{hyperref}
+\usepackage{hyperref}
+\hypersetup{
+    urlcolor = \csname colortheme\endcsname, 
+    linkcolor = \csname colortheme\endcsname, 
+    citecolor = \csname colortheme\endcsname}
+\urlstyle{same}
+\usepackage{mhsetup, mathtools}
+\usepackage[capitalize,nameinlink,noabbrev]{cleveref}
+
+% \usepackage[capitalize]{cleveref} % for cross-referencing theorems, etc.
+\usepackage{graphicx} % for putting pictures
+\usepackage[T1]{fontenc} % for accents, etc.
+\usepackage{verbatim} % for commenting out sections of text
+\usepackage[nodisplayskipstretch, onehalfspacing]{setspace} % 1.5 spacing
+\usepackage{tikz, tikz-cd, pgfplots} % for drawing pictures
+\pgfplotsset{compat=newest} % so the errors go away
+% \usepackage{cite}
+\usepackage{multicol}
+\usepackage{array,multirow}
+\usepackage[normalem]{ulem}
+
+% Define new bonus counter that follows section
+\newcounter{bonussection}[section]
+\renewcommand{\thebonussection}{\thesection★}
+
+% Define new bonus subsection counter that follows bonussection
+\newcounter{bonussubsection}[bonussection]
+\renewcommand{\thebonussubsection}{\thebonussection.\arabic{bonussubsection}★}
+
+% Theorem boxes
+\usepackage{thmtools}
+\usepackage[framemethod = TikZ]{mdframed}
+\usepackage{silence} % for suppressing warnings 
+\WarningFilter{mdframed}{You got a bad break}
+
+\mdfsetup{
+	linewidth = 0.3mm,
+	innertopmargin = 3mm,
+	innerbottommargin = 3.5mm,
+	innerleftmargin = 3mm,
+	innerrightmargin = 3mm,
+    topline=false,
+    bottomline=false,
+    rightline=false,
+    leftline=false,
+    roundcorner = 5pt
+} % adjusts boundaries of boxes
+
+\newcommand{\thmboxstyle}[4]{
+	\mdfdefinestyle{#2}{
+		linecolor = #3,
+		backgroundcolor = #4,
+	}
+	\declaretheoremstyle[
+		headfont = \sffamily\bfseries\color{#3},
+		mdframed = {style = #2},
+		headpunct = {\\[0.4pt]},
+		postheadspace = {0pt},
+	]{#1}
+}
+
+% five different colors of boxes
+
+\thmboxstyle{bluebox}{mdbluebox}{black!90!red}{cyan!6}
+\thmboxstyle{greenbox}{mdgreenbox}{green!70!black}{teal!4}
+\thmboxstyle{graybox}{mdgreenbox}{gray!30!black}{gray!10}
+
+\declaretheorem[style = bluebox, name = Theorem]{theorem}
+\declaretheorem[style = bluebox, name = Proposition]{proposition}
+\declaretheorem[style = graybox, name = Result]{result}
+\declaretheorem[style = graybox, name = Fact]{fact}
+\declaretheorem[style = graybox, name = Question, sibling = theorem]{question}
+\declaretheorem[style = graybox, name = Definition, sibling = theorem]{definition}
+\declaretheorem[style = graybox, name = Objective, sibling = theorem]{objective}
+\declaretheorem[style = graybox, name = Remark, sibling = theorem]{remark}
+
+\declaretheorem[style = graybox, name = Objective]{objectivebox}
+\declaretheorem[style = graybox, name = Key Idea]{ideabox}
+\declaretheorem[style = graybox, name = Problem, sibling = theorem]{problembox}
+\declaretheorem[style = graybox, name=Question, sibling=theorem]{questionbox}
+\declaretheorem[style = graybox, name=Recipe, sibling=theorem]{recipebox}
+\declaretheorem[style = graybox, name=Remark, sibling=theorem]{remarkbox}
+\declaretheorem[style = graybox, name = Intuition, sibling = theorem]{intuitionbox}
+\declaretheorem[style = graybox, name = Summary, sibling = theorem]{summarybox}
+
+\declaretheorem[style = graybox, name = Background, sibling = theorem]{backgroundbox}
+\declaretheorem[style = graybox, name = Example, sibling = theorem]{examplebox}
+\declaretheorem[style = graybox, name = Observation, sibling = theorem]{observationbox}
+
+% Provide names for cleverref
+\crefname{theorem}{Theorem}{Theorems}
+\crefname{proposition}{Proposition}{Propositions}
+\crefname{result}{Result}{Results}
+\crefname{fact}{Fact}{Facts}
+\crefname{question}{Question}{Questions}
+\crefname{definition}{Definition}{Definitions}
+\crefname{objective}{Objective}{Objectives}
+\crefname{remark}{Remark}{Remarks}
+
+\crefname{objectivebox}{Objective}{Objectives}
+\crefname{ideabox}{Key idea}{Key ideas}
+\crefname{problembox}{Problem}{Problems}
+\crefname{questionbox}{Question}{Questions}
+\crefname{recipebox}{Recipe}{Recipes}
+\crefname{remarkbox}{Remark}{Remarks}
+\crefname{intuitionbox}{Intuition}{Intuitions}
+\crefname{summarybox}{Summary}{Summaries}
+\crefname{backgroundbox}{Background}{Backgrounds}
+\crefname{examplebox}{Example}{Examples}
+\crefname{observationbox}{Observation}{Observations}
+
+%\setlength{\parsep}{0em}
+% \setlength{\parskip}{1em}
+% \setlength{\parindent}{0em}
+
+% Editing shortcut
+\newcommand{\rednote}[1]{\textcolor{red}{#1}}
+
+% Math shortcuts
+\newcommand{\EE}{\mathbb{E}}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\PP}{\mathbb{P}}
+\newcommand{\QQ}{\mathbb{Q}}
+
+\DeclarePairedDelimiterX{\infdivx}[2]{(}{)}{%
+  #1\;\delimsize\|\;#2%
+}
+\newcommand{\dkl}{D_{\text{KL}}\infdivx}
+
+\usepackage{etoolbox}
+\letcs\originald{\encodingdefault\string\d}
+\DeclareRobustCommand*\d
+  {\ifmmode\mathop{}\!\mathrm{d}\else\expandafter\originald\fi}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+

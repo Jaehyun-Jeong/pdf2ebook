@@ -9,3 +9,23 @@ papers/**/*.Zone.Identifier
 diag/
 diag*/
 loop.log
+# LaTeX recompile pipeline: track source .tex/.sty/.bib + build.sh, ignore the
+# bulky regenerable figures, the downloaded tarball, and all build artifacts.
+latex_src/figures/
+latex_src/fm_guide_assets/
+latex_src/source.tar.gz
+latex_src/*.pdf
+latex_src/*.aux
+latex_src/*.log
+latex_src/*.bbl
+latex_src/*.bcf
+latex_src/*.blg
+latex_src/*.out
+latex_src/*.toc
+latex_src/*.fls
+latex_src/*.fdb_latexmk
+latex_src/*.run.xml
+latex_src/*.maf
+latex_src/*.mtc*
+latex_src/*.ptc
+latex_src/.DS_Store

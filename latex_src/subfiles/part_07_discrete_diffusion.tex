@@ -1,0 +1,433 @@
+\section{Discrete Diffusion Models: Building Language Models with Diffusion}
+\label{sec:discrete_diffusion}
+In previous sections, we explored flow and diffusion models as generative models over \emph{Euclidean space} $\mathbb{R}^d$ that allow us to generate data points represented by \emph{vectors} $z\in \mathbb{R}^d$. However, not all data is naturally modeled as a point in Euclidean space $\R^d$. Many data types, such as text or DNA, are more naturally viewed as elements of a \emph{discrete} state space $S$. Most importantly, language consists of a sequence of discrete tokens that we want to model. How could we apply flow and diffusion models to such data types? It turns out that the principles that we have learned in previous sections extend to such data types as well. The resulting models are called \themebf{discrete diffusion models} in the machine learning literature \citep{campbell2022continuous,gat2024discrete}. However, it is important to keep in mind that there is no mathematical diffusion process (SDEs don't exist in discrete state spaces). Instead of having ODEs/SDEs, we use \themebf{continuous-time Markov chains (CTMCs)}. In the following, we will explain CTMC models (see \cref{subsec:ctmc_model}) and how to learn them (see \cref{subsec:ctmcs}) allowing us to build large language models (LLMs) using the principles of flow and diffusion models.
+
+\subsection{Continuous-Time Markov chain (CTMC) models}
+\label{subsec:ctmc_model}
+In this section, we explain continuous-time Markov chains (CTMCs). You can think of CTMCs as a discrete analogue of SDEs that we can use to build neural network models that generate discrete states. Further, we will introduce CTMC models, i.e. neural network models that allow to generate discrete sequences such as text using CTMCs.
+
+\begin{wrapfigure}{r}{0.5\textwidth}
+  %\begin{center}
+\includegraphics[width=0.5\textwidth]{figures/CTMCIllustration.png}
+  %\end{center}
+\caption{\label{fig:CTMC_illustration}Illustration of a CTMC trajectory with state space $S=\{S_1,S_2,S_3\}$ (sequence length $d=1$). Figure adapted from \citep{campbell2022continuous}.}
+\end{wrapfigure}
+
+Let us begin by characterizing our \themebf{state space} $S$. Let $\mathcal{V}=\{v_{1},\cdots,v_{V}\}$ be our vocabulary. The state space is given by $S=\mathcal{V}^d$ where $d\in \mathbb{N}$ is sequence length and $V\in \mathbb{N}$ is the vocabulary size. For language, $\{v_{1},\cdots,v_{V}\}$ could enumerate our alphabet or a set of discrete tokens and $S$ would represent the set of sequences (or sentences) of length $d$. For DNA, $\{v_{1},\cdots,v_{V}\}$ could be all 4 DNA bases and $S$ all DNA sequences of length $d$.
+
+Next, let $X_t$ be a stochastic process on $S$, i.e. a random trajectory $X:[0,1]\to S, t\mapsto X_{t}$ in $S$. We require $X_t$ to be a \themebf{Markov process}, i.e. a process that has no memory. Specifically, this means that the following condition holds
+\begin{align*}
+\underbrace{p(X_{t+h}|X_{t}, X_{t_1},\cdots, X_{t_k})}_{\text{prob. of future given present and past}}=\underbrace{p(X_{t+h}|X_{t})}_{\text{prob. of future given present}}\quad (\text{for all }0<h, 0\leq t_1<t_2<\cdots <t_k<t)
+\end{align*}
+In other words, the probabilities of future events only depend on the present - the past has no relevance for the future anymore. Note that ODE/SDEs - while not on discrete state spaces - are also Markov processes. Here, $X_t$ is on a discrete space and therefore is called a Markov \emph{chain}, specifically a \themebf{Continuous-time Markov chain (CTMC).} The quantity $p_{t+h|t}(X_{t+h}|X_{t})$ are the \themebf{transition probabilities} and they fully determine the CTMC together with the initial distribution $X_0\sim p_0$ of the Markov chain. Therefore, when we say CTMC, you can also just think of transition probabilities $p_{t+h|t}(X_{t+h}|X_{t})$.
+
+Next, let us derive the analogue of a vector field in the discrete setting. As we are in a discrete setting, we can only jump (or switch) between states - we cannot go into a direction anymore like we did when specifying ODEs. Therefore, we define a \themebf{rate matrix} $Q_t(y|x)$ that effectively summarizes the rate of jumping (or switching) from state $x\in S$ to state $y\in S$. Formally, a rate matrix $Q_t$ is given by a bounded function (continuous in time) 
+\begin{align}
+\label{eq:rate_matrix}
+    Q:S\times S\times[0,1] \to \mathbb{R},\quad 
+    (x,y,t)\mapsto Q_t(y|x)
+\end{align}
+where $Q_t(y|x)$ describes the rate of switching from $x$ from $y$ such that 
+\begin{align}
+\label{eq:condition_1_ctmc}
+    \text{(1) Outgoing rates are positives:  }Q_t(y|x)\geq& 0 \quad \text{whenever }x\neq y\\
+\label{eq:condition_2_ctmc}
+    \text{(2) Rate staying equals negative outgoing rate: }Q_t(x|x)=&-\sum\limits_{y\neq x}Q_t(y|x)\quad \text{ for all }x
+\end{align}
+The two conditions are intuitive: The first condition says that the rate of switching from $x$ to a different state $y\neq x$ can only be non-negative (not switching just corresponds to $0$ - so it does not make sense to have a rate that is smaller than $0$). The second condition says that the rate $Q_t(x|x)$ of staying at $x$ should cancel out with the rate of leaving $x$ - it is essentially a consistency condition saying that you have to either stay at $x$ or leave (there is no third option). Note that these conditions imply in particular that $Q_t(x|x)\leq 0$. Hence, $Q_t(y|x)$ is a matrix whose diagonal entries are all non-positive while all off-diagonal entries are non-negative.
+
+We can now define the analogue of a differential equation, i.e. a condition on a CTMC to ``follow'' the rate matrix. The idea is basically that the distribution or evolution of $X$ should follow the rate matrix $Q_t$. In other words, we require that the transition probabilities fulfill
+\begin{align}
+\label{eq:ctmc_ode}
+    \frac{\dd}{\dd h}p_{t+h|t}(X_{t+h}=y|X_{t}=x)_{|h=0}=Q_t(y|x)\quad\text{for all }x,y\in S, 0\leq t
+\end{align}
+The left-hand side is the infinitesimal rate of change of the probability of switching from $x$ to $y$. We impose the condition that these probabilities should change as specified by the rate matrix. Let's briefly check that it reasonable to request these conditions, i.e. we simply set $Q_t(y|x)$ as in \cref{eq:ctmc_ode}, would it be a valid rate matrix? For $h=0$, the probability of switching from $x$ to $y\neq x$ is zero (as no time has passed), i.e. $p_{t|t}(y|x)=0$ for all $y\neq x$. Therefore, we know that the derivative must be non-negative and $Q_t(y|x)\geq 0$ whenever $y\neq x$. This checks that the first condition in \cref{eq:condition_1_ctmc} holds. Further, we know that 
+\begin{align*}
+\sum\limits_{y\neq x} Q_t(y|x)=\sum\limits_{y\neq x}\frac{\dd}{\dd h}p(X_{t+h}=y|X_{t}=x)_{|h=0}=\frac{\dd}{\dd h}\sum\limits_{y\neq x}p(X_{t+h}=y|X_{t}=x)_{|h=0}=&\frac{\dd}{\dd h}(1-p(X_{t+h}=x|X_{t}=x))\\
+=&-Q_t(x|x)
+\end{align*}
+where we used that probabilities sum to $1$. This shows \cref{eq:condition_2_ctmc}. This checks that every CTMC has at least one rate matrix satisfying \cref{eq:ctmc_ode}. But what if we go backwards - what if we specify $Q_t$, is there a corresponding CTMC and if so, is it unique? This is indeed the case.
+\begin{theorem}[CTMC existence and uniqueness]
+\label{thm:ctmc_existence_and_uniqueness}
+For any rate matrix $Q_t$ (bounded and continuous in time $t$), there is a unique Markov chain $X_{t}$ (i.e. a unique set of transition probabilities $p_{t+h|t}(y|x)$) such that \cref{eq:ctmc_ode} holds.
+\end{theorem}
+For the interested reader, we provide a self-contained proof in \cref{appendix:existence_uniquenss_ctmcs}
+. The key takeaway from this theorem is that for the purposes of machine learning, we can state a construct a rate matrix $Q_t$ (e.g. via  a neural network) and assume that there is a unique Markov chain that corresponds to $Q_t$.
+\begin{examplebox}[Two-state CTMC with equal jump rates]
+Let $S=\{a,b\}$ and consider a time-homogeneous CTMC $(X_t)_{t\ge 0}$ that
+switches between both states at a constant rate $\lambda>0$:
+\[
+Q=
+\begin{array}{c|cc}
+ & a & b\\\hline
+a & -\lambda & \lambda\\
+b & \lambda & -\lambda
+\end{array}.
+\]
+Then the transition probabilities over a time increment $h\ge 0$ are also constant in time $t$ and given by
+\begin{align*}
+\begin{pmatrix}
+p(X_{t+h}=a|X_t=a) & p(X_{t+h}=a|X_t=b)\\
+p(X_{t+h}=b|X_t=a) & p(X_{t+h}=b|X_t=b)
+\end{pmatrix}
+=
+\frac12
+\begin{pmatrix}
+1+e^{-2\lambda h} & 1-e^{-2\lambda h}\\
+1-e^{-2\lambda h} & 1+e^{-2\lambda h}
+\end{pmatrix}.
+\end{align*}
+One can check by hand that \cref{eq:ctmc_ode} holds, i.e. these transition probabilities indeed are the correct ones for that rate matrix. In fact, these rates are very intuitive: The chain keeps flipping with an instantaneous rate
+$\lambda$. The exponential term $e^{-2\lambda h}$
+captures how the memory of the initial state decays. As infinite time passes, i.e. for $h\to\infty$, it holds that
+\[
+P(h)\to \begin{pmatrix}\frac12&\frac12\\\frac12&\frac12\end{pmatrix},
+\]
+so the chain forgets where it started and is in $a$ or $b$ with probability $1/2$. This convergence is faster the higher the rate $\lambda>0$ of switching.
+\end{examplebox}
+
+\textbf{Simulation of CTMC.} Next, let us think about how one would go about simulating a trajectory of a CTMC. Let $h>0$ be a step size and $\pinit$ be an initial distribution over $S$, e.g. $\pinit=\text{Unif}_{S}$ is the uniform distribution over $S$. Then we can simulate it iteratively by setting $X_0\sim \pinit$ and setting
+\begin{align*}
+X_{t+h}\sim &p_{t+h|t}(\cdot|X_t)
+\end{align*}
+Now, this would work if we knew $p_{t+h|t}(\cdot|X_t)$. However, for all but the simplest CTMCs, we typically do not know the transition kernel in closed form and only have access to the rate matrix $Q_t$. Still, by \cref{eq:ctmc_ode}:
+\begin{align*}
+  p_{t+h|t}(X_{t+h}=y|X_t=x)
+=p_{t|t}(X_{t}=y|X_t=x)+hQ_t(y|x)+R_{t}(h)=1_{y=x}+hQ_t(y|x)+R_t(h)
+\end{align*}
+where $R_t(h)$ is an error term that we can neglect for small $h$. Therefore, for small $h$, we can set
+\begin{align*}
+p_{t+h|t}(X_{t+h}=y|X_t=x)\approx 1_{y=x}+hQ_t(y|x)=:\tilde{p}_{t+h|t}(y|x)
+\end{align*}
+One can check that $\tilde{p}_{t+h|t}(y|x)$ is indeed a valid probability distribution for small $h$ by the conditions we imposed on the rate matrix. Therefore, we can approximately sample the next point via
+\begin{align}
+\label{eq:ctmc_simulation}
+X_{t+h}\sim \tilde{p}_{t+h|t}(\cdot|x)=(1_{y=x}+hQ_t(y|x))_{y\in S}
+\end{align}
+As the above is just a discrete distribution, we can sample from it easily via standard methods. This is a simple way to simulate a CTMC.
+
+\paragraph{CTMC model.} Next, let us define how we can a parameterize a CTMC in a neural network. A \themebf{CTMC model} (or \themebf{discrete diffusion model}) is given by an initial distribution $\pinit$ over $S$ and a neural network $Q_t^\theta$ with parameters $\theta$ such that for every input $x\in S$ the model returns a single column of the rate matrix
+\begin{align*}
+    x\mapsto \{Q_t^\theta(y|x)\}_{y\in S}
+\end{align*}
+We want the model to return an entire column because we require it for simulation of the CTMC (\cref{eq:ctmc_simulation}), i.e. sampling the next state.
+
+One complication with the above model is that the space $S$ can be \emph{very} large. In particular, $|S|=V^d$ where $V$ is our vocabulary size and $d$ is the sequence length. This exponential growth makes it basically impossible to store an entire column of the rate matrix in memory - $\{Q_t^\theta(y|x)\}_{y\in S}$ could never be represented in a computer. Therefore, we have to constrain the model.  Specifically, almost all CTMC models are \emph{factorized} (see \cref{fig:factorized_ctmc}), which is effectively a sparsity constraint. Specifically, a \themebf{factorized CTMC model} is given by a CTMC model $Q_t^\theta$ such that for all $y=(y_1,\cdots, y_d),x=(x_1,\cdots,x_d)\in S=\mathcal{V}^d$ it holds
+\begin{align*}
+Q_t^\theta(y|x)=0\quad \text{whenever }y_i\neq x_i\text{ for more than one position }i
+\end{align*}
+We call all $y$ that differ from $x$ in at most one token the \themebf{neighbors} $N(x)$ of $x$. We can write such a factorized CTMC model as
+\begin{align*}  x\mapsto \{Q_t^\theta(y|x)\}_{y\in N(x)} 
+=&
+\begin{pmatrix}
+Q_t^\theta(v_1,1|x) & \cdots Q_t^\theta(v_{V},1|x)\\
+\cdots\\
+Q_t^\theta(v_1,d|x) & \cdots Q_t^\theta(v_{V},d|x)\\
+\end{pmatrix}
+\end{align*}
+where $Q_t(y|x)=Q_t^\theta(v_i,j|x)$ now gives the rate of going from $x=(x_1,\cdots,x_d)$ to the neighbor of $x$ that we obtain swapping out the $j$-th element with $v_i$, i.e. $y=(x_1,\cdots,x_{j-1},v_{i},x_{j+1},\cdots,x_{d})$. Each row corresponds to a rate matrix per position $i=1,\cdots,d$, i.e. we require 
+\begin{align*}
+    Q_t^\theta(v,i|x)\geq 0\text{ if }v\neq x_i,\quad Q_t(x_i,i|x)=-\sum\limits_{v\neq x_i}Q_t^\theta(v,i|x)
+\end{align*}
+We can enforce these conditions on the output of a neural network easily, e.g. one can use a  transformer model on sequence length $d$ with output dimension $V$. Note also that the factorized rate matrix makes the output shape $d\times V$ - this size increases linearly in the dimension (as opposed to exponentially). 
+
+% Finally, we note that then the incoming rate at $x$ is given by the sum of all incoming rates for each position:
+% \begin{align*}
+%     Q_t^\theta(x|x)=-\sum\limits_{i=1}^{d}\sum\limits_{v\neq x_i}Q_t^\theta(v,i|x)
+% \end{align*}
+
+\begin{figure}[!t]
+    \centering
+\includegraphics[width=0.9\textwidth]{figures/FactorizedFigure.pdf}
+    \caption{Illustration of a factorized CTMC model. Factorized CTMCs have only non-zero rates ($Q_t(y|x)\neq 0$) if the start and end point differ by only one dimension (here, $d=2$). Figure taken from \citep{lipman2024flow}.}
+\label{fig:factorized_ctmc}
+\end{figure}
+
+\paragraph{Simulating a CTMC model.} To sample from a CTMC model, we sample $X_{0}\sim \pinit$ and perform an iteration where we sample the next state according to \cref{eq:ctmc_simulation}. We present an algorithm in \cref{alg:sampling_ctmc_model}. As shown there, for factorized CTMC models, one can use a parallel per-token Euler approximation, where each token is updated independently during a small step $h>0$. This approximation agrees with the full CTMC Euler step up to first order in $h$, but allows for a $O(h^2)$ probability of simultaneous updates to multiple tokens.
+\begin{algorithm}[H]
+\caption{Sampling from a Factorized CTMC Model}
+\label{alg:sampling_ctmc_model}
+\begin{algorithmic}[1]
+\REQUIRE Rate network $Q_t^\theta$ (factorized), initial distribution $\pinit$, number of steps $n$
+\STATE Set $t \gets 0$, step size $h \gets \frac{1}{n}$
+\STATE Draw a sample $X_0 \sim \pinit$, where $X_0=(X_0^{(1)},\dots,X_0^{(d)})\in\mathcal{V}^d$
+\FOR{$i=1,\dots,n$}
+    \STATE Compute factorized jump rates $\{q_{j}(v)\}_{j=1..d,\ v\in\mathcal{V}} \gets Q_t^\theta(\cdot \mid X_t)$
+    \FOR{$j=1,\dots,d$ \textbf{(in parallel)}}
+        \STATE $x \gets X_t^{(j)}$ \COMMENT{current token at position $j$}
+        \STATE Define the per-position Euler transition probabilities $\tilde p_{j,t}(\cdot \mid X_t^{(j)}=x)$ by
+        \[
+        \tilde p_{j,t}(v\mid x) \;=\;
+        \begin{cases}
+        h\, q_{j}(v), & v\neq x,\\[4pt]
+        1 - h\sum\limits_{v'\in \mathcal{V}\setminus\{x\}} q_{j}(v'), & v=x.
+        \end{cases}
+        \]
+        \STATE Sample $X_{t+h}^{(j)} \sim \textsc{Categorical}\!\left(\{\tilde p_{j,t}(v\mid x)\}_{v\in\mathcal{V}}\right)$
+    \ENDFOR
+    \STATE Set $t \gets t + h$
+\ENDFOR
+\RETURN $X_1$
+\end{algorithmic}
+\end{algorithm}
+
+% \begin{remarkbox}[Independent updates per token for factorized CTMCs]
+% \label{remark:independent_updates}
+% \ph{Bad justification.}
+% We briefly justify why \cref{alg:sampling_ctmc_model} can update each token independently. The main intuition is single token updates have probability of order $h$, while any change in \emph{two} token positions within a short step $[t,t+h]$ requires \emph{two} distinct single-token jumps, and thus has probability only of order $h^2$. To see this, fix the current sequence $x\in\mathcal{V}^d$ at time $t$. By the definition of the rate matrix, we know that for small $h$,
+% \[
+% \mathbb{P}(\text{no jump in }[t,t+h]\mid X_t=x)=1+Q_t(x|x)h+O(h^2),
+% \]
+% By negation, we know that
+% \[
+% \mathbb{P}(\text{at least one jump in }[t,t+h]\mid X_t=x)=-Q_t(x|x)h+O(h^2).
+% \]
+% Moreover, to first order in $h$, the probability that the \emph{first} jump is the single-token update
+% $x\to x^{(j\to v)}$ equals its rate times $h$:
+% \[
+% \mathbb{P}(X_{t+h}=x^{(j\to v)}\mid X_t=x)
+% = q_{j,t}(v\mid x)\,h + O(h^2).
+% \]
+
+% Now take any $y$ that differs from $x$ in two positions. Under a factorized generator, there is no direct transition $x\to y$ in one jump, so reaching $y$ within $[t,t+h]$ requires \emph{at least two jumps}. But already one jump has probability $O(h)$, so two jumps has probability
+% \[
+% \mathbb{P}(\ge 2 \text{ jumps in }[t,t+h]\mid X_t=x)=O(h^2),
+% \]
+% and therefore
+% \[
+% \mathbb{P}(X_{t+h}=y\mid X_t=x)=O(h^2)
+% \quad\text{for all }y \text{ differing from }x\text{ in }\ge 2 \text{ tokens}.
+% \]
+% Thus, ignoring multi-token updates incurs only an $O(h^2)$ error per step, which justifies the independent per-token update rule to first order in $h$.
+% \end{remarkbox}
+
+\subsection{Training CTMC models}
+\label{subsec:ctmcs}
+
+We next discuss how to learn CTMC models. The principles are the same as for flow matching: (1) We construct a probability path interpolating between noise and data. (2) We derive a conditional rate matrix and marginal rate matrix. (3) We learn the marginal rate matrix in a simulation-free manner. We will explain this recipe now step-by-step.
+
+In this section, the \themebf{data distribution} $\pdata$ is a distribution over $S$ characterized by a probability mass function. Namely, $\pdata:S\to\mathbb{R}_{\geq 0}, z\mapsto \pdata(z)$ with $\sum_{z\in S}\pdata(z)=1$. We do not know $\pdata$ but we access to samples $z\sim \pdata$ during training in form of a data set. For example, all texts on the world wide web. Our goal is to learn to generate samples $z\sim \pdata$. Our goal is to train the CTMC model $Q_t^\theta$ such that 
+\begin{align*}
+X_0\sim \pinit, \quad X_t\text{ CTMC of }Q_t^\theta\quad \Rightarrow \quad X_{1}\sim \pdata
+\end{align*}
+So as you might realize, this is no different from the Euclidean case $\mathbb{R}^d$ (see \cref{sec:odes_sdes,sec:flow_matching}), just that we use a CTMC model instead of a flow/diffusion model.
+
+\subsubsection{Conditional and Marginal Probability Path}
+We define $\delta_{z}(x)$ to be function such that $\delta_{z}(x)=0$ if $x\neq z$ and $\delta_{z}(x)=1$ if $x=z$. A (discrete) \themebf{conditional probability path} is given by set of  distributions $p_t(x|z)$ for $x,z\in S$ and $0\leq t\leq 1$ such that 
+\begin{align*}
+p_0(\cdot|z)=\pinit, \quad p_1(\cdot|z)=\delta_{z}
+\end{align*}
+So similar to the Euclidean case, a discrete conditional probability path interpolates between a distribution that is independent of $z$ to a distribution that has all mass on $z$. A (discrete) \themebf{marginal probability path} is then given by
+\begin{align*}
+p_t(x)=\sum\limits_{z\in S}p_t(x|z)\pdata(z)
+\end{align*}
+One can easily check that the marginal probability path interpolates ``noise'' and data:
+\begin{align}
+\label{eq:discrete_prob_path_interpolation}
+    p_0=\pinit, \quad p_1=\pdata
+\end{align}
+\begin{examplebox}[Factorized mixture path (independent noising per token)]
+\label{example:factorized_mixture_path}
+Let $S=\mathcal{V}^d$ and let $\pinit(x)=\prod_{j=1}^d \pinit^{(j)}(x_j)$ be a factorized initial distribution.
+Fix a \textbf{scheduler} $0\le \kappa_t\le 1$ such that $\kappa_{0}=0,\kappa_{1}=1$ with $\frac{\dd}{\dd t}\dot{\kappa}_t\geq 0$. Define the conditional path by
+\begin{align*}
+p_t(x|z)
+&=\prod_{j=1}^d\Big[(1-\kappa_t)\,\pinit^{(j)}(x_j)+\kappa_t\,\delta_{z_j}(x_j)\Big].
+\end{align*}
+Equivalently, one can sample $x\sim p_t(\cdot\mid z)$ by drawing i.i.d.\ masks $m_j=0,1$ and noise $\xi_j\sim \pinit^{(j)}$, then setting
+\begin{align*}
+m_j&\sim\mathrm{Bernoulli}(\kappa_t), \quad \xi_j\sim \pinit^{(j)}\\
+x_j &= m_j\, z_j + (1-m_j)\,\xi_j,\qquad j=1,\dots,d\\
+x&=(x_1,\cdots,x_d)
+\end{align*}
+We call the above the \textbf{factorized mixture path}. The above procedure effectively ``destroys'' the $j$-th token independently for each position in the sequence with a probability $1-\kappa_{t}$, i.e. for $t=0$ $1-\kappa_{t}=1$ and all information is destroyed and for $t=1$ it holds that $1-\kappa_{t}=0$ and no information is destroyed. Note that this is similar to the Gaussian probability path \cref{example:gaussian_path} in the sense that information is destroyed progressively with a speed determined by a scheduler $\kappa_{t}$. However, it is also different from the Gaussian probability path as the factorized mixture path does \emph{not} move/transports probability mass (there is no direction as we are in discrete space) - it simply fades in one distribution and fades out another.
+\end{examplebox}
+
+\begin{figure}[H]
+  \begin{center}
+\includegraphics[width=\textwidth]{figures/factorized_mixture_path_2d.pdf}
+\end{center}
+\caption{\label{fig:discrete_prob_path_illustration} Illustration of a discrete probability path for $d=2$. Top row: Conditional probability path interpolating between initial distribution and Dirac distribution. Bottom row: Interpolation between initial distribution and data distribution (here, chess board pattern). Note the similarity and differences to \cref{fig:cond_marginal_path_histograms}: Here, the probability path is ``teleported'' (we downweigh the initial distribution and upweight the terminal distribution).}
+\end{figure}
+
+\subsubsection{Conditional and Marginal Rate Matrix}
+
+As a next step, we will now construct the training target of discrete flow matching. First, we construct a conditional rate matrix - the analogue to the conditional vector field for flow matching. Let $Q_t^z(y|x)$ be a rate matrix for every data point $z\in S$. Then we call it a \themebf{conditional rate matrix} if 
+\begin{align*}
+    X_0\sim \pinit,\quad  X_t\text{ CTMC of }Q_t^z\quad \Rightarrow \quad X_{t}\sim p_t(\cdot|z)
+\end{align*}
+In other words, the conditional rate matrix is such that its CTMC ``follows'' the conditional probability path. The conditional rate matrix serves as a building block to construct the marginal rate matrix that follows the marginal probability path:
+\begin{theorem}[Discrete marginalization trick]
+\label{thm:discrete_marginalization_trick}
+The \themebf{marginal rate matrix} defined by
+\begin{align}
+\label{eq:discrete_marginal_rate_matrix}
+Q_t(y|x)=\sum\limits_{z\in S}Q_t^z(y|x)\frac{p_t(x|z)\pdata(z)}{p_t(x)}=\sum\limits_{z\in S}Q_t^z(y|x)p_{1|t}(z|x)\quad \text{where }p_{1|t}(z|x):=\frac{p_t(x|z)\pdata(z)}{p_t(x)}
+\end{align}
+is a valid rate matrix and fulfills the following condition:
+\begin{align*}
+     X_0\sim \pinit,\quad  X_t\text{ CTMC of }Q_t\quad \Rightarrow \quad X_{t}\sim p_t
+\end{align*}
+In particular, $X_1\sim \pdata$ by \cref{eq:discrete_prob_path_interpolation}, i.e. the CTMC of the marginal rate matrix converts noise to data.
+\end{theorem}
+To prove this statement, we need a fundamental equation for CTMCs, the so-called \emph{Kolmogorov Forward equation}:
+\begin{proposition}[Kolmogorov Forward Equation]
+\label{prop:kfe_ctmc}
+Let $p_t$ be a set of distributions on $S$ for every $0\leq t\leq 1$. Further, let $X_t$ be a CTMC with matrix $Q_t$ and initial distribution $p_0$. Then $X_t\sim p_t$ for all $0\leq t\leq 1$ if and only if the \themebf{Kolmogorov Forward Equation (KFE)} holds:
+\begin{align*}
+    \frac{\dd}{\dd t}p_t(x)=\sum\limits_{y\in S}Q_t(x|y)p_t(y)
+\end{align*}
+\end{proposition}
+\begin{proof}[Proof of KFE]
+To show that the KFE is necessary, assume that $p_t(x)$ are the true marginals of the CTMC, i.e. $X_t\sim p_t$ for every $0\leq t\leq 1$. Then we can compute:
+\begin{align*}
+\frac{\dd}{\dd t}p_t(x)&\overset{(i)}{=}\frac{\dd}{\dd h}_{|h=0}p_{t+h}(x)\\
+&\overset{(ii)}{=}\frac{\dd}{\dd h}_{|h=0}\sum\limits_{y}p_{t+h|t}(x|y)p_t(y)\\
+&\overset{(iii)}{=}\sum\limits_{y}\frac{\dd}{\dd h}_{|h=0}p_{t+h|t}(x|y)p_t(y)\\
+&\overset{(iv)}{=}\sum\limits_{y}Q_t(x|y)p_t(y)
+\end{align*}
+where in $(i)$ we simple use a time offset, in $(ii)$ we use the definition of the transition probabilities, in $(iii)$ we swap sum and derivative, and in $(iv)$ we use the definition of the rate matrix (see \cref{eq:ctmc_ode}).
+
+Next, to show that the KFE is sufficient, we can rewrite the KFE in matrix form:
+\begin{align*}
+\frac{\dd}{\dd t}p_t = Q_tp_t
+\end{align*}
+where in this equation we consider $p_t=(p_t(x))_{x\in S}$ as a vector and $Q_t=(Q_t(y|x))_{x,y\in S}$ as a matrix. Note that the above is a linear ODE over vector space $\mathbb{R}^S$. Its initial condition is fixed by $p_0$ as stated in the theorem. Therefore, if any other set of marginals $q_t$ fulfills this equation, we know that by the uniqueness of ODEs (see \cref{thm:ode_existence_and_uniqueness}) that we can conclude that $q_t=p_t$. This shows that the KFE is also sufficient.
+\end{proof}
+
+\begin{proof}[Proof of \cref{thm:discrete_marginalization_trick}]
+Using the KFE, it remains to show that marginal rate matrix defined as in the theorem (see \cref{eq:discrete_marginal_rate_matrix}) fulfills the KFE:
+\begin{align*}
+\frac{\dd}{\dd t}p_t(x)\overset{(i)}{=}&\frac{\dd}{\dd t}\sum\limits_{z\in S}p_t(x|z)\pdata(z)\\
+\overset{(ii)}{=}&\sum\limits_{z\in S}\frac{\dd}{\dd t}p_t(x|z)\pdata(z)\\
+\overset{(iii)}{=}&\sum\limits_{z\in S}\left[\sum\limits_{y\in S}Q_t^z(x|y)p_t(y|z)\right]\pdata(z)\\
+\overset{(iv)}{=}&\sum\limits_{y\in S}p_t(y)\left[\sum\limits_{z\in S}Q_t^z(x|y)\frac{p_t(y|z)\pdata(z)}{p_t(y)}\right]\\
+\overset{(v)}{=}&\sum\limits_{y\in S}p_t(y)Q_t(x|y)
+\end{align*}
+where $(i)$ follows by the definition of the marginal probability path, in $(ii)$ we swap the sum and the derivative, in $(iii)$ we use the KFE on the conditional rate matrix, in $(iv)$ we multiply and divide by $p_t(y)$, and in $(v)$ we use the definition of the marginal rate matrix $Q_t(y|x)$. This shows that the KFE is fulfilled. The statement follows by \cref{prop:kfe_ctmc}.
+\end{proof}
+Let us now derive a concrete example of a conditional rate matrix for the factorized mixture path.
+\begin{examplebox}[Conditional rate matrix for factorized mixture path]
+\label{example:cond_rate_matrix_mixture_path}
+Set $\frac{\dd}{\dd t}\kappa_t=\dot{\kappa}_t$. The factorized mixture path has a factorized conditional rate matrix given by
+\begin{align*}
+Q_t^z(y|x)&=(Q_t^z(v_i,j|x_j))_{v_i,j}\\
+Q_t^z(v_i,j|x_j)&=\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z_j}(v_i)-\delta_{x_j}(v_i))\\
+=&\frac{\dot{\kappa}_t}{1-\kappa_t}\begin{cases}
+    0 & \text{if }x_j=z_j\\
+    1 & \text{ if }v_i=z_j, x_j\neq z_j\\
+    0 & \text{ if }v_i\neq z_j, x_j\neq z_j\\
+    -1 & \text{ if }v_i=x_j, x_j\neq z_j
+\end{cases}
+\end{align*}
+Note that this is a very simple rate matrix: It only allows for jumps to $z^j$ - i.e. if any token $j$ is updated, it must jump to the token value of the terminal data point $z=(z_1,\cdots,z_d)$ - and it only jumps to $z^j$ if we are not yet there.
+\begin{proof}
+We note that the factorized mixture path completely factorizes into independent components and so does the suggested conditional rate matrix. Therefore, we can without loss of generality assume that $d=1$. So we just do the calculation per dimension. Then, we can derive:
+\begin{align*}
+\frac{\dd}{\dd t}p_t(x|z)
+\overset{(i)}{=}&\frac{\dd}{\dd t}\left[(1-\kappa_t)\pinit(x)+\kappa_t\delta_{z}(x)\right]\\
+\overset{(ii)}{=}&\dot{\kappa}_t\delta_{z}(x)-\dot{\kappa}_t\pinit(x)\\
+\overset{(iii)}{=}&\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z}(x)-[(1-\kappa_t)\pinit(x)+\kappa_t\delta_{z}(x)])\\
+\overset{(iv)}{=}&\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z}(x)-p_t(x|z))\\
+\overset{(v)}{=}&\frac{\dot{\kappa}_t}{1-\kappa_t}\delta_{z}(x)\left(
+1-p_t(x|z)
+\right)+\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z}(x)-1)p_t(x|z)\\
+\overset{(vi)}{=}&\sum\limits_{y\neq x}\frac{\dot{\kappa}_t}{1-\kappa_t}\delta_{z}(x)p_t(y|z)
++\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z}(x)-1)p_t(x|z)\\
+\overset{(vii)}{=}&\sum\limits_{y\neq x}Q_t^z(x|y)p_t(y|z)+Q_t^z(x|x)p_t(x|z)\\
+\overset{(viii)}{=}&\sum\limits_{y\in S}Q_t^z(x|y)p_t(y|z)
+\end{align*}
+where $(i)$ uses the definition of the factorized mixture path for $d=1$, $(ii)$ is obtained by taking derivatives and setting $\frac{\dd}{\dd t}\kappa_t=\dot{\kappa}_t$, $(iii)$ follows by simple algebra, $(iv)$ by the definition of the factorized mixture path, $(v)$ by simple algebra, $(vi)$ follows by the definition the fact that $\sum_{y\in S}p_t(y|z)=1$, $(vii)$ by the definition of the rate matrix, and $(viii)$ by simple algebra. The above shows that the KFE is fulfilled and therefore the statement follows.
+\end{proof}
+\end{examplebox}
+
+\subsubsection{Learning the Marginal Rate Matrix}
+In this section, we derive the fundamental algorithm for training CTMC models. By \cref{thm:discrete_marginalization_trick}, training a  CTMC model $Q_t^\theta(y|x)$ can be achieved by learning the marginal rate matrix. 
+
+In this section, we now restrict ourselves to the factorized mixture path (see \cref{example:factorized_mixture_path}) as this is the path most discrete diffusion/flow matching models use so far. In this case, the marginal rate matrix has a very intuitive shape:
+\begin{theorem}[Marginalization trick for factorized mixture path]
+The marginal rate matrix of the factorized mixture path is factorized and has the form
+\begin{align*}
+Q_t(v_i,j|x)&=\frac{\dot{\kappa}_t}{1-\kappa_t}(p_{1|t}(z_j=v_i|x)-\delta_{x_j}(v_i))
+\end{align*}
+where $p_{1|t}(z_j=v_i|x)$ is the conditional probability of the $j$-th position ($j$-th token in the sequence) being equal to $v_i$ given the full noisy sequence $x$.
+\end{theorem}
+\begin{proof}
+The marginal rate matrix is given by
+\begin{align}
+Q_t(y|x)&=\sum\limits_{z\in S}Q_t^z(y|x)p_{1|t}(z|x)
+\end{align}
+Now, whenever $y$ and $x$ are not neighbors (differ by more than one token), $Q_t^z(y|x)=0$ for every $z$. Therefore, also $Q_t(y|x)=0$ in this case. This shows that marginal rate matrix factorizes as well. It then holds that 
+\begin{align}
+Q_t(v_i,j|x)&=\sum\limits_{z\in S}Q_t^z(v_i,j|x)p_{1|t}(z|x)\\
+&\overset{(i)}{=}\sum\limits_{z\in S}\frac{\dot{\kappa}_t}{1-\kappa_t}(\delta_{z_j}(v_i)-\delta_{x_j}(v_i))p_{1|t}(z|x)\\
+&\overset{(ii)}{=}\frac{\dot{\kappa}_t}{1-\kappa_t}\left(\sum\limits_{z\in S}\delta_{z_j}(v_i)p_{1|t}(z|x)-\delta_{x_j}(v_i)\right)\\
+&\overset{(iii)}{=}\frac{\dot{\kappa}_t}{1-\kappa_t}\left(p_{1|t}(z_j=v_i|x)-\delta_{x_j}(v_i)\right)
+\end{align}
+where $(i)$ follows by the formula for the conditional rate matrix (see \cref{example:cond_rate_matrix_mixture_path}), $(ii)$ follows by the fact that $\sum_{z\in S}p_{1|t}(z|x)=1$, and $(iii)$ follows by marginalization. This finishes the proof.
+\end{proof}
+The previous theorem is remarkable: The marginal rate matrix is effectively a reparameterization of the probabilities $p_{1|t}(z_j=v_i|x)$. This is effectively nothing else than learning a classifier for each token position $j=1,\dots,d$. In other words, we can simply define a \themebf{denoising probabilities network} as
+\begin{align*}
+p_{1|t}^\theta:\underbrace{x}_{\text{network input}}\mapsto\underbrace{(p_{1|t}^\theta(z_j=v_i|x))_{j=1,\cdots,d, v_i\in \mathcal{V}}}_{\text{network output}}
+\end{align*}
+Note that the network output has shape $d\times V$. One can obtain probabilities per token position via  simple softmax layer. The network itself can be a standard sequence-to-sequence network, e.g. a transformer works (see \cref{subsec:transformers}).
+
+As this is simply a classifier per position $j$, we can train such a network via the cross-entropy loss per $j=1,\cdots,d$. This leads to the \themebf{Discrete Flow Matching loss} given by
+\begin{align*}
+\mathcal{L}_{\text{DFM}}(\theta)=\mathbb{E}_{z\sim \pdata, t\sim\text{Unif}_{[0,1]}, x\sim p_t(\cdot|z)}\left[\sum\limits_{j=1}^{d}-\log p_{1|t}^\theta(z_j|x)\right]
+\end{align*}
+This is remarkable: To train a generative model, all we need to do is to train a classifier model per position $j$. In the same way as continuous flow matching reduced to simple regression (see \cref{sec:flow_matching}), discrete flow matching and discrete diffusion models reduce  to simple classification training. In \cref{alg:dfm_training_single}, we summarize the training algorithm. Post-training, we can sample via \cref{alg:sampling_ctmc_model}.
+\begin{examplebox}[Masked Diffusion Language Model]
+A specific case of the above method is \themebf{masked diffusion language models (MDLMs)}. The idea of MDLMs is that we can extend the vocabulary of tokens $\mathcal{V}=\{v_1,\cdots,v_{V}\}$ with a new token $\text{[mask]}$ that indicates that this token is missing (or was masked). Specifically, we set $\mathcal{V}=\{v_1,\cdots,v_{V},\text{[mask]}\}$ and the initial point is simply $\text{[mask]}^d$, i.e. the sequence that is all-masked. Formally, this means setting $\pinit=\delta_{\text{[mask]}^d}$ in the above framework. The sampling procedure is illustrated in \cref{fig:MDLM_illustration}.
+\end{examplebox}
+\begin{algorithm}[h]
+\caption{Training factorized CTMC  Model (Discrete Diffusion)}
+\label{alg:dfm_training_single}
+\begin{algorithmic}[1]
+\REQUIRE Dataset of sequences $z\sim \pdata$ with $z=(z_1,\dots,z_d)\in\mathcal{V}^d$;\\
+initial (noise) token marginals $\pinit^{(j)}$ on $\mathcal{V}$; schedule $\kappa_t\in[0,1]$; \\posterior network $f_\theta$ returning per-position logits over $\mathcal{V}$; optimizer \textsc{Opt}
+\FOR{each training iteration}
+    \STATE Sample a data point $z \sim \pdata$
+    \STATE Sample time $t \sim \mathrm{Unif}[0,1]$ and compute $\kappa \gets \kappa_t$
+    \STATE Sample a noisy state $x \sim p_t(\cdot\mid z)$ (factorized mixture path):
+    \FOR{$j=1,\dots,d$ \textbf{(in parallel)}}
+        \STATE Sample mask $m_j\sim\mathrm{Bernoulli}(\kappa)$
+        \STATE Sample noise token $\xi_j\sim \pinit^{(j)}$
+        \STATE Set $x_j \gets m_j\, z_j + (1-m_j)\,\xi_j$
+    \ENDFOR
+    \STATE $x \gets (x_1,\dots,x_d)$
+    \STATE Predict terminal-token posteriors via logits from the network:
+    \[
+      \ell_j(\cdot)\ \gets\ f_\theta(x,t)_j
+      \qquad\Rightarrow\qquad
+      p^\theta_{1|t}(v\mid x)_j \;=\; \mathrm{Softmax}\!\big(\ell_j\big)(v)
+    \]
+    \STATE Discrete Flow Matching loss (token-wise NLL of $z$):
+    \[
+      \mathcal{L}_{\text{DFM}}(\theta)
+      \;\gets\;
+      \sum_{j=1}^d \Big[-\log p^\theta_{1|t}(z_j\mid x)_j\Big]
+    \]
+    \STATE Update parameters: $\theta \gets \textsc{Opt.step}\big(\nabla_\theta \mathcal{L}_{\text{DFM}}(\theta)\big)$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\begin{figure}[H]
+  \begin{center}
+\includegraphics[width=\textwidth]{figures/masked_diffusion_trajectory_aligned.pdf}
+\end{center}
+\caption{\label{fig:MDLM_illustration} Illustration of the trajectory of a Masked Diffusion Language Model.}
+\end{figure}
+
+This completes now a full pipeline of training and sampling CTMC models that allows us to generate discrete sequences such as text. Current state-of-the-art discrete diffusion models \citep{bie2025llada2} use the recipe described in this work, with neural networks (usually transformers) trained on web-scale data.
+
+\begin{remarkbox}[Generator Matching]
+You may wonder why the principles of flow/diffusion models could be translated so seamlessly to discrete state spaces. As it turns out, the principles of flow matching are not unique to flows or even CTMCs. Rather, these are general learning principles for constructing generative models with \emph{Markov processes}. This idea leads to the \themebf{Generator Matching} framework \citep{holderrieth2024generator}, a framework that extends and unifies both discrete and continuous flow and diffusion models into one. A generator is a generalization of a vector field $u_t$ and a rate matrix $Q_t$. Markov processes and generators can be built for any data modality and state spaces. For example, you can build models for smooth manifolds \citep{chen2023flow, de2022riemannian} (e.g. geometric data), mixed state spaces (e.g. joint text and image generation) \citep{campbell2024generative}, and other Markov processes such as jump processes \citep{holderrieth2024generator, campbell2023trans}.
+\end{remarkbox}
+
+% Optional (for sampling later): convert predicted posterior to a factorized marginal generator:
+% \[
+% Q_t^\theta(v,j \mid x)
+% \;=\;
+% \frac{\dot\kappa_t}{1_
