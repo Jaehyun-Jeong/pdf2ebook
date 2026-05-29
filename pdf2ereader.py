@@ -65,6 +65,10 @@ DEVICES: dict[str, Device] = {
     "kobo_libra": Device("kobo_libra", 303.4, 403.2, "7\" Kobo Libra 2"),
     # 10.2" 1860x2480 @ 300ppi -> 446.4 x 595.2 pt
     "kindle_scribe": Device("kindle_scribe", 446.4, 595.2, "10.2\" Kindle Scribe"),
+    # Custom: long edge sized so MIT's ~497pt body column lands at ~9pt in
+    # landscape (10pt * (451.1-2*PAGE_MARGIN)/496.8 ~= 9.0pt). Larger page than a
+    # 6" panel -> read on a ~7.5" reader or any zoomable tablet/PDF app.
+    "reader9": Device("reader9", 339.4, 451.1, "custom ~9pt body (read landscape on 7.5\"+ / tablet)"),
 }
 
 
