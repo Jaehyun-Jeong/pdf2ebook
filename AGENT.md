@@ -315,3 +315,18 @@ have not rendered and viewed this iteration.
   only routes to 8pt are reflow or line-cutting (both BANNED) or a wider device
   (user declined). => two consecutive clean double-checks + clean metric + all
   levers exhausted at the true geometric ceiling => STOP. Loop objective complete.
+
+## iter 2026-05-29 (re-fire — protocol re-verify, STOP holds)
+- Loop re-fired after the converged STOP. Per the re-fire protocol (re-run metric
+  + render two FRESH page-sets; reopen only on a NEW defect or changed input set):
+  input set unchanged (papers/ = MIT only); ast.parse OK; regenerated /tmp/mit.pdf
+  = 146 pp, median 6.89pt (p10=4.82 p90=6.89), 0 blank, cov med 100.4% / min 54.48%
+  — IDENTICAL to the recorded STOP metric. Rendered + Read TWO fresh independent
+  page-sets (distinct from prior A/B): A2 {3,21,52,80,110,135,144}, B2 {12,40,66,
+  95,125,142}. BOTH fully CLEAN — callout boxes (Summary 7/14/27, Theorem 3/41,
+  Remark 21, Proposition 3) flow at body size; (i)-(viii) derivation rows + eqs
+  32-34/63-65/108/109/138/139/146/147/148 on own rows with attached numbers &
+  word-tags; Algorithm 5 line-items intact; Figure 1/17 whole; footnote 6 kept;
+  §3/§4.3/§7.2.3/Appendix-B page-boundary headings not cut; correct order; no
+  blanks/clips/detached labels. No NEW defect, input unchanged => STOP holds, no
+  code change. Deliverable already current (papers/ereader/ regenerated 11:59).
