@@ -1,0 +1,2 @@
+- [Preserve PDF design](preserve-pdf-design.md) — keep original layout when improving e-reader readability; avoid reflow
+- [pdf2ebooks status](pdf2ebooks-status.md) — pdf2ereader tool; done vs pending (MIT eq-split + 6.5pt font still open)
