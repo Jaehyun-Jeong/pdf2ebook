@@ -611,6 +611,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-font", type=float, default=8.5,
                    help="auto mode: target on-device body font in pt; below this "
                         "it slices to width instead of just cropping (default: 8.5)")
+    p.add_argument("--landscape", choices=("auto", "on", "off"), default="auto",
+                   help="landscape output (read device sideways) for wide single-"
+                        "column docs whose text would otherwise be tiny: "
+                        "auto=on when fitw text < --min-font (default), on, off")
     p.add_argument("--padding", type=float, default=4.0,
                    help="points of whitespace to keep around content (default: 4)")
     p.add_argument("--outlier-pct", type=float, default=5.0,
@@ -645,7 +649,18 @@ def main(argv: list[str] | None = None) -> int:
         result.save(out_path, garbage=4, deflate=True)
         pages_out = result.page_count
     else:
-        result = run_split(src, crops, dev, two_col=(mode == "2col"))
+        use_dev = dev
+        want_land = args.landscape == "on"
+        if args.landscape == "auto" and mode == "fitw":
+            cw = statistics.median([crops[i].width for i in crops]) if crops else dev.width_pt
+            f = median_font_size(src, _sample_indices(src.page_count)) or 10.0
+            eff = f * (dev.width_pt - 2 * PAGE_MARGIN) / cw
+            want_land = eff < args.min_font
+        if want_land:
+            use_dev = Device(dev.name + "+landscape", dev.height_pt, dev.width_pt, dev.desc)
+            print(f"[landscape] rotated for readability "
+                  f"({use_dev.width_pt:.0f}x{use_dev.height_pt:.0f} pt) — read device sideways")
+        result = run_split(src, crops, use_dev, two_col=(mode == "2col"))
         result.save(out_path, garbage=4, deflate=True)
         pages_out = result.page_count
         result.close()
