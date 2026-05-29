@@ -180,23 +180,68 @@ def emit_region(out: "fitz.Document", src: "fitz.Document", pno: int,
     page.show_pdf_page(target, src, pno, clip=clip)
 
 
-def slice_fit_width(clip: "fitz.Rect", dev: Device) -> list["fitz.Rect"]:
-    """Split a column/region vertically so each slice, scaled to fill the
-    device width, is at most one screen tall. Small overlap avoids cutting a
-    line of text in half across the page break."""
-    width_scale = dev.width_pt / clip.width
-    screen_h_in_src = dev.height_pt / width_scale  # source-units per screen
-    if clip.height <= screen_h_in_src * 1.02:
-        return [clip]
-    overlap = screen_h_in_src * 0.04
+def region_atoms(page: "fitz.Page", region: "fitz.Rect") -> list["fitz.Rect"]:
+    """Indivisible content units inside `region`: text *lines*, images, and
+    vector drawings. A page break must never cut through one of these."""
+    atoms: list[fitz.Rect] = []
+
+    info = page.get_text("dict")
+    for block in info.get("blocks", []):
+        if block.get("type", 0) == 0:  # text -> line granularity
+            for line in block.get("lines", []):
+                r = fitz.Rect(line["bbox"]) & region
+                if r.width > 1 and r.height > 1:
+                    atoms.append(r)
+        else:  # image block
+            r = fitz.Rect(block["bbox"]) & region
+            if r.width > 1 and r.height > 1:
+                atoms.append(r)
+
+    for path in page.get_drawings():
+        if path.get("rect"):
+            r = fitz.Rect(path["rect"]) & region
+            if r.width > 1 and r.height > 1:
+                atoms.append(r)
+
+    try:
+        for item in page.get_image_rects(full=True):
+            rr = item[0] if isinstance(item, (tuple, list)) else item
+            r = fitz.Rect(rr) & region
+            if r.width > 1 and r.height > 1:
+                atoms.append(r)
+    except Exception:
+        pass
+
+    atoms.sort(key=lambda r: (round(r.y0, 1), round(r.x0, 1)))
+    return atoms
+
+
+def screen_height_src(region_width: float, dev: Device) -> float:
+    """How tall, in source units, one device screen is when `region_width` is
+    scaled to fill the device width."""
+    return dev.height_pt * region_width / dev.width_pt
+
+
+def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
+                screen_h: float) -> list["fitz.Rect"]:
+    """Group atoms top-to-bottom into slices no taller than `screen_h`, cutting
+    only in the whitespace *between* atoms. An atom taller than a screen (a big
+    figure) gets its own slice and is scaled down whole. No overlap, so nothing
+    is shown twice."""
+    if not atoms:
+        return [region]
     slices: list[fitz.Rect] = []
-    y = clip.y0
-    while y < clip.y1 - 1:
-        y_end = min(y + screen_h_in_src, clip.y1)
-        slices.append(fitz.Rect(clip.x0, y, clip.x1, y_end))
-        if y_end >= clip.y1:
-            break
-        y = y_end - overlap
+    top = region.y0
+    last_bot = atoms[0].y1
+    for a in atoms[1:]:
+        cand_bot = max(last_bot, a.y1)
+        if (cand_bot - top) > screen_h and last_bot > top:
+            slices.append(fitz.Rect(region.x0, top, region.x1, last_bot))
+            top = (last_bot + a.y0) / 2 if a.y0 > last_bot else a.y0
+            last_bot = a.y1
+        else:
+            last_bot = cand_bot
+    slices.append(fitz.Rect(region.x0, top, region.x1, last_bot))
     return slices
 
 
@@ -327,7 +372,11 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
             regions = [crop]
 
         for region in regions:
-            for sl in slice_fit_width(region, dev):
+            atoms = region_atoms(page, region)
+            if not atoms:
+                continue
+            screen_h = screen_height_src(region.width, dev)
+            for sl in pack_slices(region, atoms, screen_h):
                 emit_region(out, src, i, sl, dev)
     return out
 
