@@ -287,32 +287,54 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
     except Exception:
         pass
 
-    # Merge nearby figure atoms into composite figure blocks.
-    gap = 10.0
+    # Merge nearby figure atoms into composite figure blocks (generous gap).
+    figs = _merge_rects(figs, 10.0)
+    # Merge text atoms by TIGHT overlap: a display equation's glyphs (tall
+    # brackets, matrix rows, sub/superscripts) overlap each other and fuse into
+    # ONE block so a page break can't fragment the equation. Prose lines are
+    # stacked with gaps and do NOT overlap, so they stay separate (and keep
+    # flowing across pages). See AGENT.md.
+    texts = _merge_rects(texts, 1.0)
+    # Absorb a text block into a figure it overlaps (equation numbers, captions
+    # sitting against a figure) so they travel together.
+    free_text: list[fitz.Rect] = []
+    for t in texts:
+        for k, f in enumerate(figs):
+            if fitz.Rect(f.x0 - 2, f.y0 - 2, f.x1 + 2, f.y1 + 2).intersects(t):
+                figs[k] = f | t
+                break
+        else:
+            free_text.append(t)
+
+    blocks = [(r, "text") for r in free_text] + [(r, "fig") for r in figs]
+    blocks.sort(key=lambda it: (round(it[0].y0, 1), round(it[0].x0, 1)))
+    return blocks
+
+
+def _merge_rects(rects: list["fitz.Rect"], infl: float) -> list["fitz.Rect"]:
+    """Iteratively union rects whose bboxes intersect after inflating by `infl`."""
+    rects = [fitz.Rect(r) for r in rects]
     changed = True
-    while changed and figs:
+    while changed and rects:
         changed = False
         out: list[fitz.Rect] = []
-        used = [False] * len(figs)
-        for a in range(len(figs)):
+        used = [False] * len(rects)
+        for a in range(len(rects)):
             if used[a]:
                 continue
-            cur = fitz.Rect(figs[a])
+            cur = fitz.Rect(rects[a])
             used[a] = True
-            for b in range(a + 1, len(figs)):
+            for b in range(a + 1, len(rects)):
                 if used[b]:
                     continue
-                infl = fitz.Rect(cur.x0 - gap, cur.y0 - gap, cur.x1 + gap, cur.y1 + gap)
-                if infl.intersects(figs[b]):
-                    cur |= figs[b]
+                box = fitz.Rect(cur.x0 - infl, cur.y0 - infl, cur.x1 + infl, cur.y1 + infl)
+                if box.intersects(rects[b]):
+                    cur |= rects[b]
                     used[b] = True
                     changed = True
             out.append(cur)
-        figs = out
-
-    blocks = [(r, "text") for r in texts] + [(r, "fig") for r in figs]
-    blocks.sort(key=lambda it: (round(it[0].y0, 1), round(it[0].x0, 1)))
-    return blocks
+        rects = out
+    return rects
 
 
 def emit_stacked(out: "fitz.Document", src: "fitz.Document", pno: int,
