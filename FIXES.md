@@ -84,6 +84,17 @@ numeric regression out p124 eq 115-118 + "(for all f...)" tags still attached,
 no dup; p133 ELBO/Remark 42 unchanged) + metric (pages 142->141 as the two
 stranded tag-lines collapse back, font 6.54pt unchanged, blank 0, cov med 96.4%).
 
+iter (re-verify word-tag fix, no code change): STOP — acceptance met (RE-ASSERTED
+after the word-tag reopen). The word-tag fix (f1be6fb) reset the clean counter, so
+a fresh from-scratch double-check was run. 14-inspector workflow over TWO
+independent page-sets — A {0,14,35,60,90,120,140}, B {7,28,50,75,105,130,138} —
+BOTH fully clean (zero defects: equations intact w/ attached numbers, figures
+whole, callout boxes at body size, TOC/refs clean, no header/footer dup, correct
+order, no stranded pages). p134 (the prior word-tag defect) Read directly: tags
+now right-aligned ON their r^recon/r^gen rows — fix holds. Metric: 141 pages,
+6.54pt (geometric 6.6pt ceiling), 0 blank, cov med 96.4% / min 52.23%. Two
+consecutive clean double-checks + clean metric + font at ceiling => loop complete.
+
 iter (re-verify #4, no code change): STOP — acceptance met. Fresh from-scratch
 double-check found ZERO printing defects across TWO independent page-sets
 (pass1 {0,12,40,70,100,130}, pass2 {6,25,55,85,115,141}): equations intact with

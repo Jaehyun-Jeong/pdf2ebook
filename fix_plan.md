@@ -10,8 +10,23 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-(empty — last defect fixed this iter; needs a fresh two-pass double-check
-before STOP can be re-asserted, since this restart's double-check was DIRTY.)
+(empty — fresh two-pass double-check this iter found ZERO defects; STOP
+re-asserted. See STOP note below.)
+
+## STOP re-asserted 2026-05-29 — fresh from-scratch double-check CLEAN
+
+- [x] **Re-verify after word-tag fix (commit f1be6fb). No code change.** The
+      restart's word-tag fix had reset the two-consecutive-clean counter, so a
+      fresh from-scratch double-check was required. Regenerated /tmp/mit.pdf
+      (141 pp, 6.54pt, 0 blank, cov med 96.4% / min 52.23%). Ran a 14-inspector
+      workflow over TWO independent page-sets — pass A {0,14,35,60,90,120,140},
+      pass B {7,28,50,75,105,130,138} — BOTH fully clean (zero defects:
+      equations intact w/ attached numbers, figures whole, callout boxes flow at
+      body size, TOC/refs clean, no header/footer dup, correct order, no stranded
+      pages). Also Read p134 directly (the last-fixed defect): word-tags now
+      right-aligned ON their r^recon/r^gen rows, gone. => two consecutive clean
+      double-checks + clean metric + font at the geometric 6.6pt ceiling => STOP.
+      Loop objective complete; counter is now at TWO clean.
 
 ## Reopened 2026-05-29 — restart double-check found a NEW defect (now fixed)
 

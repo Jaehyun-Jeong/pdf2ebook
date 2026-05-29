@@ -204,6 +204,19 @@ have not rendered and viewed this iteration.
   two-consecutive-clean counter is 0. NEXT loop: double-check from scratch (render
   2 fresh page-sets, Read every page) before any STOP.
 
+## iter 2026-05-29 (re-verify after word-tag fix — STOP, acceptance met)
+- No code change. Fresh from-scratch double-check required because the word-tag
+  fix (f1be6fb) had reset the two-consecutive-clean counter. Regenerated
+  /tmp/mit.pdf (141 pp, 6.54pt, 0 blank, cov med 96.4% / min 52.23%). Ran a
+  14-parallel-inspector workflow over TWO independent page-sets — A {0,14,35,60,
+  90,120,140}, B {7,28,50,75,105,130,138}: BOTH fully clean, zero defects.
+  Additionally Read p134 directly (the previously-detached word-tag page):
+  "(reconstruction sampler)"/"(generative sampler)" now right-aligned ON their
+  equation rows — fix holds. => two consecutive clean double-checks + clean
+  metric + font at the geometric 6.6pt ceiling => STOP. All fix_plan items done.
+  If the loop re-fires: re-run metric + render two fresh page-sets; only reopen
+  if a NEW defect appears or the input set (papers/) changes.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in
