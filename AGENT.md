@@ -635,3 +635,14 @@ architecture.
 - STOP: acceptance criteria met (0 overflow pages, body 8-10pt, equations correct,
   design preserved, two consecutive clean double-check passes). The wide-equation
   overflow objective is COMPLETE. No further iterations needed.
+
+## iter 2026-05-29 (re-fire — protocol re-verify, STOP holds)
+- Loop re-fired post-convergence. Re-fire protocol: input unchanged (papers/ = MIT
+  only); git clean; deliverable byte-identical to main.pdf (12814730 bytes). Metric
+  on main.pdf: 224pp, 257.3x347.5pt, text-blocks-past-edge=0, draw-past-edge=0,
+  worst block overflow 0.0pt; dominant body span 10.0pt — IDENTICAL to recorded STOP
+  metric (deterministic build). Rendered + Read TWO fresh pages distinct from prior
+  sets: p124 (§6.3 VAE — gray callout box w/ bold-blue "latent diffusion" link, body
+  ~10pt, Appendix-D link, section heading; clean) and p199 (rFID/gFID prose w/ inline
+  q_φ(z)/p_data math + bold term-tags + Figure-22 link; clean). No overflow, no clip,
+  design intact. No NEW defect, input unchanged => STOP holds, no code change.
