@@ -686,3 +686,15 @@ architecture.
   ORIGINAL arXiv source (subsection starts at page bottom), reproduced faithfully — not
   a defect we introduced; preserving original design is required. No NEW defect, input
   unchanged => STOP holds, no code change.
+
+## iter 2026-05-29 (re-fire #5 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: git clean, input unchanged
+  (papers/ = MIT only, same bytes May 29 10:24), deliverable byte-identical to main.pdf
+  (12814730 bytes). Metric on main.pdf: 224pp, 257.3x347.5pt, text-past-edge=0,
+  draw-past-edge=0, worst 0.0pt; dominant body span 10.0pt (11905 spans), selectable —
+  IDENTICAL to recorded STOP metric (deterministic build). Rendered + Read TWO fresh
+  pages distinct from all prior sets: p112 (§6.2 Variational Autoencoders — dense body
+  prose w/ inline μ_θ(z)/p_data(x)/p_θ(x) math, "Amenability to Generative Modeling"
+  para, body ~10pt) and p170 (References — bibliography entries w/ blue arXiv/DOI links
+  intact, nothing past edge). No overflow, no clip, design intact. No NEW defect, input
+  unchanged => STOP holds, no code change.
