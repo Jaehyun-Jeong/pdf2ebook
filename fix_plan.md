@@ -5,16 +5,23 @@ next loop iteration does. Verify every change by rendering pages and LOOKING.
 
 ## To do
 
-- [ ] **Confirm figures/tables render whole** on a figure-heavy page of each
-      paper (render + look). pack_slices keeps an atom intact, but a figure made
-      of many small vector drawings could still be split between atoms — check
-      and, if needed, merge clustered drawing atoms into one figure atom.
-- [ ] **Tune title/header band size.** Full-width title bands are inherently
-      small (full A4 width scaled to 257pt). Acceptable for title/authors, but
-      check no full-width *body* paragraph (non-column) ends up too small; if so,
-      fitw-slice those bands instead of single-shot fit.
-- [ ] **Spot-check reading order** on a 2-col page with a mid-page figure: should
-      be left-col, right-col, then the spanning figure in its y-position.
+- [ ] **#1 Collapse whitespace — kill mostly-blank pages (TOP PRIORITY).**
+      Confirmed by rendering: sparse source pages (title page, a lone trailing
+      line + page number) produce near-empty output pages, because `pack_slices`
+      cuts on big vertical gaps and `emit_region` renders the gap as whitespace.
+      Fix: replace pack_slices+emit_region for split modes with an atom-STACKING
+      emitter that lays atoms top-to-bottom on the output page with *collapsed*
+      spacing (preserve small inter-line gaps, cap large gaps at ~0.8x atom
+      height), starting a new page when full. Result: dense, pretty pages, no
+      cut lines, no blank waste. Preserve each atom's horizontal offset within
+      its region (so centered titles stay centered, columns stay left-aligned).
+- [ ] **#2 Merge clustered atoms into figures BEFORE stacking.** `region_atoms`
+      returns a figure's many sub-drawings/images as separate atoms; stacking
+      them individually would scramble a figure. Cluster atoms by proximity
+      (overlapping/near bboxes) into one composite atom rendered whole. Must land
+      together with #1 or figures break.
+- [ ] **#3 Re-verify reading order** on a 2-col page with a mid-page figure:
+      left-col, right-col, then the spanning figure at its y-position.
 
 ## Done
 
