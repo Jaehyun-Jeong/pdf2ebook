@@ -10,19 +10,26 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-- [ ] **#2 MIT font too small (6.5pt).** Landscape fit of MIT's wide single
-      column only reaches 6.5pt. To enlarge WITHOUT reflow, split each wide
-      single-column page into TOP/BOTTOM sub-pages (vertical halves), each fitting
-      the screen width → ~1.5-2x font (~9-10pt). Must NOT cut a text line or an
-      equation: split only at whitespace between blocks (the _Flow already groups
-      by atoms, so increasing effective width per sub-page is the lever). Keep
-      reading order. Verify font goes up AND #1 stays fixed (no new splits).
-- [ ] **#3 Minor: residual blank/clipped pages.** Metric pass-1: MIT blank=3,
-      LeCun blank=2 + clipped_pages=1. Investigate the 1 LeCun clipped page
-      (content bbox past page edge) and the handful of blanks; likely oversized-
-      block pages or end-of-section. Low priority vs #1/#2.
-- [ ] **#4 Re-verify all three** against acceptance: font as large as design
-      allows, zero splits/blanks/clipping, MonoBite unchanged.
+- [ ] **#4 Re-verify against acceptance** (next iteration's double-check):
+      zero printing defects across body/eq/figure/TOC, font at ceiling. If a
+      second consecutive double-check finds nothing new → STOP (done).
+- [ ] **#5 (low) Detached equation numbers, p140-ish.** Double-check flagged
+      (125)/(126)/(127) possibly stacked in a margin band away from their bodies
+      (LOW confidence — may be correct landscape layout for a stacked property
+      list). Inspect before touching; do NOT regress eq-integrity.
+
+## Resolved / not-actionable
+
+- **#2 MIT font (was "split to 9-10pt") — NOT ACHIEVABLE without reflow.**
+  MEASURED: MIT body is a genuine FULL-WIDTH single column — prose lines reach
+  ~497pt, crop ~508pt. On the landscape long edge (347.5pt) the max whole-line
+  scale is 335.5/508 = 0.66 → 6.6pt. A TOP/BOTTOM split does NOT change line
+  width → same 0.66 → NO font gain. A LEFT/RIGHT split WOULD enlarge (~13pt) but
+  cuts every text line horizontally = a banned printing defect (PROMPT's own
+  "no text line cut at a boundary" rule). Tighter margins buy only 6.6→6.8pt.
+  CONCLUSION: 6.6pt IS the design-preserving ceiling for MIT; the 9-10pt target
+  presumed a split that geometry forbids. Font is therefore "as large as design
+  preservation allows" — acceptance met on the font axis. (Recorded in AGENT.md.)
 
 ## Done
 
@@ -32,6 +39,11 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 - [x] #1 display equations no longer scattered (84a16a9): anisotropic text merge
       (infl_x=16, infl_y=1) fuses each equation row into one intact block; verified
       on MIT eq (68)/(69). pages 179->158, clipped 124->89, no blowup.
+- [x] #3 running-header + page-number furniture removed (_is_furniture in
+      region_blocks): killed duplicated heading bands (3.3/4.3 repeated below the
+      page number) AND the blank trailing "84" page + lone page-number pages.
+      pages 158->148, blank 0, lone-number pages 3->0, font 6.54pt unchanged,
+      equations/figures/TOC/title intact. See FIXES.md.
 
 ## Known pitfalls
 

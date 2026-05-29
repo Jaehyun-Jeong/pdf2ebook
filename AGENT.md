@@ -88,6 +88,35 @@ have not rendered and viewed this iteration.
 - NEXT (fix_plan #1 is now #2): MIT font still 6.5pt. To enlarge w/o reflow, split
   each wide single-col page into top/bottom sub-pages so each fills the screen.
 
+## iter 2026-05-29 (header/footer furniture — fix #3 DONE)
+- Double-check (6 parallel inspectors over a dense render sample) found REAL
+  defects beyond font: HIGH — blank trailing page (only "84"), orphaned eq band
+  on one page; MED — section heading duplicated below the page number (p035 "3.3
+  Learning the Marginal Vector Field", p056 "4.3 Score Matching").
+- ROOT CAUSE: source has a running header at y0≈44.4 (5.6% — section num+name on
+  every page) and a centered page-number footer at y≈710-723 (89.7%). The crop's
+  trimmed-union includes both bands, so region_blocks extracted them as text
+  atoms and _Flow placed them → duplicated heading bands + isolated page-number
+  pages. (Body runs y≈82.8→700, i.e. 10.5%→88%.)
+- FIX: new _is_furniture() drops (a) any text line with y0 < 7% of source page
+  height (running header) and (b) pure-number lines (arabic/roman) in the top OR
+  bottom margin (page numbers); applied in region_blocks before merge/flow. The
+  numeric gate protects footnotes (y≈85%, non-numeric); 7% top band sits safely
+  above the 10.5% body start so no real first line or section heading is lost
+  (real headings live mid-body, e.g. src p18 y613). Verified: pages 158->148,
+  blank 0, lone-number pages 3->0, font 6.54pt unchanged, eq/fig/TOC/title intact.
+- NOTE: get_text on the OUTPUT still reports the dropped furniture text — it
+  lives in the clipped show_pdf_page XObject layer (not visible). Trust the
+  RENDER, not get_text, when checking for visible duplicates/blanks.
+
+## FONT CEILING (important — stops chasing an impossible target)
+- MIT body = genuine FULL-WIDTH single column: prose lines ~497pt, crop ~508pt.
+  Landscape long edge 347.5pt → max whole-line scale 335.5/508 = 0.66 → 6.6pt.
+  TOP/BOTTOM split keeps line width → NO font gain. LEFT/RIGHT split would give
+  ~13pt but CUTS every line = banned defect. Margins buy only +0.2pt. So ~6.6pt
+  IS the design-preserving ceiling; the old "split MIT to 9-10pt" goal is
+  geometrically impossible without reflow (banned). Treat font axis as DONE.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in

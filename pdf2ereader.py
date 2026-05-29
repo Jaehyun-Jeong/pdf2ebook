@@ -32,6 +32,7 @@ Do NOT convert to EPUB — that breaks math.
 from __future__ import annotations
 
 import argparse
+import re
 import statistics
 import sys
 from dataclasses import dataclass
@@ -251,6 +252,32 @@ def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
     return slices
 
 
+_PAGENUM_RE = re.compile(r"(?:\d{1,4}|[ivxlcdm]{1,8})", re.IGNORECASE)
+
+
+def _is_furniture(line_bbox, text: str, page_rect: "fitz.Rect") -> bool:
+    """True if a text line is publisher furniture — a running header (section
+    name repeated atop every page) or a page-number footer — that must NOT flow
+    into the body. Detected by position in the SOURCE page's top/bottom margin
+    band. A pure-number test gates the footer/number case so real footnotes and
+    body lines are never dropped; the body of this corpus starts ~10.5% down, so
+    the 7% top band catches only the running header, never a real first line."""
+    t = text.strip()
+    if not t:
+        return False
+    H = page_rect.height
+    y0 = line_bbox[1]
+    in_top = y0 < page_rect.y0 + 0.07 * H
+    in_bot = y0 > page_rect.y0 + 0.87 * H
+    # Page number: a line that is ONLY a number (arabic or roman) in either margin.
+    if (in_top or in_bot) and _PAGENUM_RE.fullmatch(t):
+        return True
+    # Running header: any line sitting in the very top margin band.
+    if in_top:
+        return True
+    return False
+
+
 def region_blocks(page: "fitz.Page", region: "fitz.Rect"
                   ) -> list[tuple["fitz.Rect", str]]:
     """Tagged, figure-clustered content blocks inside `region`, sorted top->bottom.
@@ -265,6 +292,9 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
     for block in info.get("blocks", []):
         if block.get("type", 0) == 0:
             for line in block.get("lines", []):
+                ltxt = "".join(s.get("text", "") for s in line.get("spans", []))
+                if _is_furniture(line["bbox"], ltxt, page.rect):
+                    continue  # drop running header / page-number footer
                 r = fitz.Rect(line["bbox"]) & region
                 if r.width > 1 and r.height > 1:
                     texts.append(r)

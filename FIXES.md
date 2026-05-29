@@ -18,3 +18,15 @@ one equation row fuse into a single block placed intact, while stacked prose
 lines stay separate — verified by render (eq 68/69 now one clean line each) +
 metric (pages 179->158, clipped 124->89, blank 0->1 trailing page-number page,
 font 6.5pt unchanged, no blowup).
+
+iter (pending-commit): FIXED MIT running-header + page-number furniture leaking
+into the flow — produced (a) duplicated section-heading bands (e.g. "3.3 Learning
+the Marginal Vector Field" / "4.3 Score Matching" repeated below the page number)
+and (b) the blank trailing "84" page + scattered lone page-number bands. Added
+_is_furniture(): drops text lines in the source page's top 7% margin band
+(running header) and pure-number lines in the top/bottom margin (page numbers),
+applied in region_blocks before merge/flow. Real body headings (~10.5% down) and
+footnotes (non-numeric) are kept. Verified by double-check render (p031/p033/p035
+clean — heading once, no footers; title+TOC+Figure-7+last page intact; equations
+still whole) + metric (pages 158->148, blank 0, lone-number pages 3->0, font
+6.54pt unchanged — font is at its geometric ceiling, see AGENT.md).
