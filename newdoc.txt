@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "<stdin>", line 2, in <module>
-  File "/home/jaehyun-jeong/pdf2ebooks/.venv/lib/python3.12/site-packages/pymupdf/__init__.py", line 2992, in __init__
-    raise FileNotFoundError(f"no such file: '{filename}'")
-pymupdf.FileNotFoundError: no such file: 'document_to_read.pdf'
