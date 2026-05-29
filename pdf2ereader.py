@@ -1,0 +1,400 @@
+#!/usr/bin/env python3
+"""pdf2ereader — make textbook PDFs readable on small (6") e-ink readers.
+
+The problem: a textbook PDF is a fixed A4/Letter canvas. A 6" Kindle/Kobo is
+only ~43% of A4's width, so "fit whole page" shrinks 12pt body text to ~5pt,
+and ~half the page is wasted white margin. This tool fixes that *while
+preserving layout* (equations, figures stay intact) — no reflow, no EPUB.
+
+Pipeline (all vector, text stays selectable):
+  1. Detect the real content bounding box per page (text + drawings + images),
+     with outlier rejection (drops page numbers / headers) and separate
+     even/odd handling (books have mirrored inner/outer margins).
+  2. Crop to that box AND rewrite the MediaBox — not just the CropBox —
+     because Kindle's native PDF renderer ignores CropBox.
+  3. Optionally split each page so content fills the screen width:
+       --mode crop   : crop margins only (one page in -> one page out)
+       --mode fitw   : fit-to-width, slice tall content into screen-height pages
+       --mode 2col   : split two columns, then fit-to-width each column
+  4. Output a PDF sized exactly to your device.
+
+Usage:
+  python pdf2ereader.py book.pdf                       # default: crop, kindle6
+  python pdf2ereader.py book.pdf --mode fitw           # single-column, slice
+  python pdf2ereader.py book.pdf --mode 2col           # two-column papers
+  python pdf2ereader.py book.pdf --device kobo_clara -o out.pdf
+  python pdf2ereader.py book.pdf --list-devices
+
+Transfer the result as a PDF over USB (Kindle: documents/ ; Kobo: drive root).
+Do NOT convert to EPUB — that breaks math.
+"""
+
+from __future__ import annotations
+
+import argparse
+import statistics
+import sys
+from dataclasses import dataclass
+
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    sys.exit("PyMuPDF is required:  pip install pymupdf")
+
+
+# ---------------------------------------------------------------------------
+# Device presets: usable screen in PDF points (1 pt = 1/72 inch).
+# pt = pixels / ppi * 72. These are the *active display* areas.
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Device:
+    name: str
+    width_pt: float
+    height_pt: float
+    desc: str
+
+
+DEVICES: dict[str, Device] = {
+    # 6" 1072x1448 @ 300ppi -> 257.3 x 347.5 pt
+    "kindle6": Device("kindle6", 257.3, 347.5, "6\" Kindle Paperwhite/Basic, Kobo Clara/Clara HD"),
+    "kobo_clara": Device("kobo_clara", 257.3, 347.5, "6\" Kobo Clara HD/2E (same panel as kindle6)"),
+    # 6.8" 1236x1648 @ 300ppi -> 296.6 x 395.5 pt
+    "kindle_pw": Device("kindle_pw", 296.6, 395.5, "6.8\" Kindle Paperwhite 11th gen / Signature"),
+    # 7" 1264x1680 @ 300ppi -> 303.4 x 403.2 pt
+    "kobo_libra": Device("kobo_libra", 303.4, 403.2, "7\" Kobo Libra 2"),
+    # 10.2" 1860x2480 @ 300ppi -> 446.4 x 595.2 pt
+    "kindle_scribe": Device("kindle_scribe", 446.4, 595.2, "10.2\" Kindle Scribe"),
+}
+
+
+# ---------------------------------------------------------------------------
+# Content bounding-box detection
+# ---------------------------------------------------------------------------
+def page_content_bbox(page: "fitz.Page") -> "fitz.Rect | None":
+    """Union bbox of all text blocks, vector drawings, and images on a page."""
+    bbox = fitz.Rect()  # empty
+
+    for block in page.get_text("blocks"):
+        bbox |= fitz.Rect(block[:4])
+
+    for path in page.get_drawings():
+        if path.get("rect"):
+            bbox |= fitz.Rect(path["rect"])
+
+    try:  # get_image_rects signature varies across PyMuPDF versions
+        for item in page.get_image_rects(full=True):
+            r = item[0] if isinstance(item, (tuple, list)) else item
+            bbox |= fitz.Rect(r)
+    except Exception:
+        pass
+
+    # Clamp to the page; ignore degenerate results.
+    bbox &= page.rect
+    return bbox if (not bbox.is_empty and bbox.width > 1 and bbox.height > 1) else None
+
+
+def _trimmed(values: list[float], pct: float, take_high: bool) -> float:
+    """Outlier-robust bound. take_high -> upper percentile, else lower.
+
+    Used so a stray header/footer or page number doesn't blow the crop open.
+    """
+    values = sorted(values)
+    if len(values) < 5 or pct <= 0:
+        return values[-1] if take_high else values[0]
+    qs = statistics.quantiles(values, n=100)  # 99 cut points, qs[i] ~ (i+1)th pct
+    idx = int(min(98, max(0, (100 - pct - 1) if take_high else (pct - 1))))
+    return qs[idx]
+
+
+def stable_crop_boxes(
+    doc: "fitz.Document", padding: float, outlier_pct: float
+) -> dict[int, "fitz.Rect"]:
+    """One crop rectangle per page, computed per parity (even/odd) so mirrored
+    book margins are respected. Outlier percentile trims headers/footers."""
+    per_page: list[tuple[int, fitz.Rect, fitz.Rect]] = []  # (idx, content, mediabox)
+    for i, page in enumerate(doc):
+        cb = page_content_bbox(page)
+        if cb is not None:
+            per_page.append((i, cb, fitz.Rect(page.rect)))
+
+    result: dict[int, fitz.Rect] = {}
+    for parity in (0, 1):
+        subset = [(i, cb, mb) for (i, cb, mb) in per_page if i % 2 == parity]
+        if not subset:
+            continue
+        x0 = _trimmed([cb.x0 for _, cb, _ in subset], outlier_pct, take_high=False)
+        y0 = _trimmed([cb.y0 for _, cb, _ in subset], outlier_pct, take_high=False)
+        x1 = _trimmed([cb.x1 for _, cb, _ in subset], outlier_pct, take_high=True)
+        y1 = _trimmed([cb.y1 for _, cb, _ in subset], outlier_pct, take_high=True)
+        crop = fitz.Rect(x0 - padding, y0 - padding, x1 + padding, y1 + padding)
+        for i, _, mb in subset:
+            result[i] = crop & mb  # never exceed that page's MediaBox
+    return result
+
+
+def detect_column_split(page: "fitz.Page", crop: "fitz.Rect") -> float | None:
+    """Return x of a two-column gutter inside `crop`, or None if single column.
+
+    Heuristic: if no text block straddles the centre but blocks sit on both
+    sides, the mid-gutter is the largest right-edge -> next-left-edge gap."""
+    blocks = [b for b in page.get_text("blocks") if b[6] == 0 and fitz.Rect(b[:4]) in crop or
+              (b[6] == 0 and fitz.Rect(b[:4]).intersects(crop))]
+    blocks = [b for b in blocks if b[6] == 0]
+    if len(blocks) < 4:
+        return None
+    cx = (crop.x0 + crop.x1) / 2
+    margin = crop.width * 0.04
+    if any(b[0] < cx - margin and b[2] > cx + margin for b in blocks):
+        return None  # a full-width block crosses the centre
+
+    rights = sorted(b[2] for b in blocks)
+    lefts = sorted(b[0] for b in blocks)
+    best_gap, best_x = 0.0, None
+    for r in rights:
+        nxt = [l for l in lefts if l > r]
+        if not nxt:
+            continue
+        gap = min(nxt) - r
+        # gutter must be reasonably central and reasonably wide
+        midpoint = r + gap / 2
+        if gap > best_gap and gap > crop.width * 0.03 and abs(midpoint - cx) < crop.width * 0.18:
+            best_gap, best_x = gap, midpoint
+    return best_x
+
+
+# ---------------------------------------------------------------------------
+# Region -> device-sized output page (aspect-preserving, vector)
+# ---------------------------------------------------------------------------
+def emit_region(out: "fitz.Document", src: "fitz.Document", pno: int,
+                clip: "fitz.Rect", dev: Device) -> None:
+    """Place `clip` from src page `pno` onto a new device-sized output page,
+    scaled to fill the width, centred, aspect preserved (no distortion)."""
+    if clip.width <= 1 or clip.height <= 1:
+        return
+    scale = min(dev.width_pt / clip.width, dev.height_pt / clip.height)
+    w, h = clip.width * scale, clip.height * scale
+    x = (dev.width_pt - w) / 2
+    y = (dev.height_pt - h) / 2
+    target = fitz.Rect(x, y, x + w, y + h)
+    page = out.new_page(width=dev.width_pt, height=dev.height_pt)
+    page.show_pdf_page(target, src, pno, clip=clip)
+
+
+def slice_fit_width(clip: "fitz.Rect", dev: Device) -> list["fitz.Rect"]:
+    """Split a column/region vertically so each slice, scaled to fill the
+    device width, is at most one screen tall. Small overlap avoids cutting a
+    line of text in half across the page break."""
+    width_scale = dev.width_pt / clip.width
+    screen_h_in_src = dev.height_pt / width_scale  # source-units per screen
+    if clip.height <= screen_h_in_src * 1.02:
+        return [clip]
+    overlap = screen_h_in_src * 0.04
+    slices: list[fitz.Rect] = []
+    y = clip.y0
+    while y < clip.y1 - 1:
+        y_end = min(y + screen_h_in_src, clip.y1)
+        slices.append(fitz.Rect(clip.x0, y, clip.x1, y_end))
+        if y_end >= clip.y1:
+            break
+        y = y_end - overlap
+    return slices
+
+
+# ---------------------------------------------------------------------------
+# Automatic mode selection
+# ---------------------------------------------------------------------------
+def _sample_indices(n: int, k: int = 12) -> list[int]:
+    """Up to k page indices spread across [0, n), skipping the very first page
+    (often a chapter/title page with atypical layout)."""
+    if n <= 1:
+        return [0] if n else []
+    start = 1 if n > 3 else 0
+    span = n - start
+    k = min(k, span)
+    return sorted({start + (i * span) // k for i in range(k)})
+
+
+def median_font_size(doc: "fitz.Document", pages: list[int]) -> float | None:
+    """Character-count-weighted median body font size (pt) over sampled pages."""
+    weighted: list[tuple[float, int]] = []
+    for i in pages:
+        for block in doc[i].get_text("dict").get("blocks", []):
+            if block.get("type", 0) != 0:
+                continue
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    txt = span.get("text", "").strip()
+                    if txt:
+                        weighted.append((round(span["size"], 1), len(txt)))
+    if not weighted:
+        return None
+    weighted.sort()
+    total = sum(w for _, w in weighted)
+    acc = 0
+    for size, w in weighted:
+        acc += w
+        if acc * 2 >= total:
+            return size
+    return weighted[-1][0]
+
+
+def two_column_fraction(doc: "fitz.Document", crops: dict[int, "fitz.Rect"],
+                        pages: list[int]) -> float:
+    """Fraction of sampled pages that look two-column."""
+    hits = considered = 0
+    for i in pages:
+        crop = crops.get(i)
+        if crop is None:
+            continue
+        considered += 1
+        if detect_column_split(doc[i], crop) is not None:
+            hits += 1
+    return hits / considered if considered else 0.0
+
+
+def choose_mode(doc: "fitz.Document", crops: dict[int, "fitz.Rect"],
+                dev: Device, min_font: float) -> tuple[str, str]:
+    """Return (mode, human-readable reason). Decision:
+      - mostly two-column            -> 2col
+      - single-column, crop is big enough on device -> crop
+      - single-column, crop too small              -> fitw
+    """
+    pages = _sample_indices(doc.page_count)
+    if not pages:
+        return "crop", "empty/degenerate document"
+
+    col_frac = two_column_fraction(doc, crops, pages)
+    if col_frac >= 0.5:
+        return "2col", f"{col_frac:.0%} of sampled pages are two-column"
+
+    sampled_crops = [crops[i] for i in pages if i in crops]
+    if not sampled_crops:
+        return "crop", "no detectable content to measure"
+    crop_w = statistics.median(c.width for c in sampled_crops)
+    crop_h = statistics.median(c.height for c in sampled_crops)
+
+    font = median_font_size(doc, pages)
+    if font is None:
+        # No extractable text (likely scanned): cropping is the safe default.
+        return "crop", "no embedded text (scanned?); cropping margins only"
+
+    # crop mode: device fits the WHOLE cropped page -> min of the two scales.
+    crop_scale = min(dev.width_pt / crop_w, dev.height_pt / crop_h)
+    eff = font * crop_scale
+    if eff >= min_font:
+        return "crop", (f"single-column, ~{font:.1f}pt text -> ~{eff:.1f}pt on "
+                        f"device after crop (>= {min_font:.1f}pt target)")
+    return "fitw", (f"single-column, ~{font:.1f}pt text -> only ~{eff:.1f}pt if "
+                    f"merely cropped (< {min_font:.1f}pt); fitting to width instead")
+
+
+# ---------------------------------------------------------------------------
+# Modes
+# ---------------------------------------------------------------------------
+def run_crop(src: "fitz.Document", crops: dict[int, "fitz.Rect"]) -> "fitz.Document":
+    """Crop margins in place by rewriting BOTH CropBox and MediaBox (Kindle
+    honours only MediaBox). One input page -> one output page; text untouched."""
+    for i, page in enumerate(src):
+        crop = crops.get(i)
+        if crop is None:
+            continue
+        crop = crop & page.rect
+        page.set_cropbox(crop)
+        src.xref_set_key(
+            page.xref, "MediaBox",
+            f"[{crop.x0:.2f} {crop.y0:.2f} {crop.x1:.2f} {crop.y1:.2f}]",
+        )
+    return src
+
+
+def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
+              dev: Device, two_col: bool) -> "fitz.Document":
+    """Rebuild as a new device-sized PDF: crop, optionally split columns,
+    fit-to-width and vertically slice each region."""
+    out = fitz.open()
+    for i, page in enumerate(src):
+        crop = crops.get(i) or page_content_bbox(page) or fitz.Rect(page.rect)
+        crop = crop & page.rect
+
+        if two_col:
+            split_x = detect_column_split(page, crop)
+            regions = (
+                [fitz.Rect(crop.x0, crop.y0, split_x, crop.y1),
+                 fitz.Rect(split_x, crop.y0, crop.x1, crop.y1)]
+                if split_x else [crop]
+            )
+        else:
+            regions = [crop]
+
+        for region in regions:
+            for sl in slice_fit_width(region, dev):
+                emit_region(out, src, i, sl, dev)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(
+        description="Optimize textbook PDFs for small e-ink readers (layout-preserving).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("input", nargs="?", help="input PDF")
+    p.add_argument("-o", "--output", help="output PDF (default: <input>.ereader.pdf)")
+    p.add_argument("--device", default="kindle6", choices=sorted(DEVICES),
+                   help="target device preset (default: kindle6)")
+    p.add_argument("--mode", default="auto", choices=("auto", "crop", "fitw", "2col"),
+                   help="auto=pick per document (default); crop=margins only; "
+                        "fitw=fit-to-width slice; 2col=split columns")
+    p.add_argument("--min-font", type=float, default=8.5,
+                   help="auto mode: target on-device body font in pt; below this "
+                        "it slices to width instead of just cropping (default: 8.5)")
+    p.add_argument("--padding", type=float, default=4.0,
+                   help="points of whitespace to keep around content (default: 4)")
+    p.add_argument("--outlier-pct", type=float, default=5.0,
+                   help="percentile trimmed per edge to ignore headers/footers (default: 5)")
+    p.add_argument("--list-devices", action="store_true", help="list device presets and exit")
+    args = p.parse_args(argv)
+
+    if args.list_devices:
+        for d in DEVICES.values():
+            print(f"  {d.name:<14} {d.width_pt:6.1f} x {d.height_pt:6.1f} pt   {d.desc}")
+        return 0
+
+    if not args.input:
+        p.error("input PDF is required (or use --list-devices)")
+
+    dev = DEVICES[args.device]
+    out_path = args.output or args.input.rsplit(".", 1)[0] + ".ereader.pdf"
+
+    src = fitz.open(args.input)
+    if src.page_count == 0:
+        sys.exit("input PDF has no pages")
+
+    crops = stable_crop_boxes(src, args.padding, args.outlier_pct)
+
+    mode = args.mode
+    if mode == "auto":
+        mode, reason = choose_mode(src, crops, dev, args.min_font)
+        print(f"[auto] chose '{mode}': {reason}")
+
+    if mode == "crop":
+        result = run_crop(src, crops)
+        result.save(out_path, garbage=4, deflate=True)
+        pages_out = result.page_count
+    else:
+        result = run_split(src, crops, dev, two_col=(mode == "2col"))
+        result.save(out_path, garbage=4, deflate=True)
+        pages_out = result.page_count
+        result.close()
+
+    print(f"[{mode}] {args.input} -> {out_path}")
+    print(f"  device {dev.name} ({dev.width_pt:.0f}x{dev.height_pt:.0f} pt), "
+          f"{src.page_count} src pages -> {pages_out} output pages")
+    src.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
