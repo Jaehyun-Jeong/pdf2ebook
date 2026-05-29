@@ -513,3 +513,38 @@ architecture.
   ~0 align blocks have nested \\ matrix/cases) OR landscape the stubborn few.
 - COUNTER: code-change iter; two-clean STOP counter N/A until multi-row done + fresh
   double-check. Deliverable NOT regenerated (overflow not ~0 yet).
+
+## iter 2026-05-29 (Lever 2d — auto-fit unnumbered \[ \] displays — overfull 28->... 33->28)
+- INVESTIGATION FINDING: the top item said "only multi-row align/alignat left", but
+  classifying ALL 20 >30pt overflows by env showed 5 were UNNUMBERED `\[...\]`
+  displays — incl. THE worst (135pt, part_05 logq/logp; also 120/98/40/39pt) — which
+  the 2a notes had DELIBERATELY excluded as equation* (environ mis-scans equation*
+  across mdframed boxes). These are the cheapest, lowest-risk class (no number, no
+  &-alignment, single-line), so per PROMPT "global low-risk levers first" I did them
+  before the harder multi-row align.
+- FIX (notes.sty): do NOT touch equation* via environ. Redefine `\[`/`\]` DIRECTLY at
+  \AtBeginDocument (after amsmath): `\def\[{\setbox\rldispbox\hbox\bgroup$\small\displaystyle}`
+  and `\def\]{$\egroup $$\ifdim\wd\rldispbox>\linewidth\resizebox{\linewidth}{!}{\usebox
+  \rldispbox}\else\usebox\rldispbox\fi$$}`. KEY: emit inside plain `$$...$$` (not
+  \centerline) — `$$` centers the (possibly resized) box AND keeps the surrounding
+  paragraph continuing un-indented after `\]`, exactly like native `\[...\]`;
+  \centerline would force a \par and indent the continuation. \resizebox only when
+  wider than \linewidth (narrow displays untouched, full size).
+- SAFETY VERIFIED before applying: `\[...\]` (=equation*) forbids top-level `\\`/`&`,
+  so an hbox capture is always valid; of 23 `\[...\]` blocks doc-wide, 3 contain `\\`
+  but ALL nested inside array/pmatrix/cases (own alignment, valid in an hbox) —
+  standalone-tested matrix+cases render correctly. Standalone-tested paragraph
+  continuation: text after `\]` is NOT indented (matches native); a blank-line-
+  separated new paragraph IS indented.
+- VERIFIED on real build: exit 0, 228pp, body font median 9.96pt UNCHANGED. overfull
+  33->28 (>30pt 20->15), worst 135.8->129.1pt (new worst is a multi-row align =
+  remaining lever, NOT a regression), pages-past-right-edge(block) 13->10. Rendered+
+  Read p121 (KL proof: wide logq/logp `\[...\]` now fits the column, vector+correct;
+  numbered eq(81) full-size tag; short E_q[..] `\[...\]` below stays natural size) and
+  p107 (DiT attention: wide `z=x..(self-attn)` (was 98pt) + `MultiHead=Concat..` (was
+  120pt) both scaled to fit, while narrow `Attn(Q,K,V)` and `head_h` displays untouched
+  = conditional resize correct). Body ~10pt, gray boxes + blue links intact. No regression.
+- REMAINING OVERFLOW = multi-row numbered `align` (14) + `alignat` (1); worst now
+  129/113/107/100/96/92pt. Next: Lever 2c part-2 (split-and-tag per row, OR landscape).
+- COUNTER: code-change iter; two-clean STOP counter N/A until multi-row align done +
+  fresh double-check. Deliverable NOT regenerated yet (overflow not ~0).

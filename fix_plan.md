@@ -64,6 +64,19 @@ off), p124, p191, p192, p199, p218.
       16→13, body 9.96pt unchanged, 228pp. Verified render: p64 eq(39) (was 189pt) fits
       w/ full-size (39); p81 eq(54) DSM-loss + margin annotation fits; p186 eqs115-118
       multi-row native intact (still overflow=next); p68 alignat Thm17 (44/45) unbroken.
+- [x] **Lever 2d — auto-fit UNNUMBERED `\[ ... \]` displays** (was deliberately
+      excluded as equation*). DONE (this iter): discovered 5 of the 20 worst-overflow
+      boxes — incl. THE worst (135pt) — were `\[...\]` displays, not align. Fixed by
+      direct redef (NOT environ): `\def\[{\setbox\rldispbox\hbox\bgroup$\small\displaystyle}`,
+      `\def\]{$\egroup $$\ifdim\wd>\linewidth\resizebox{\linewidth}{!}{..}\else..\fi$$}`.
+      Emits via plain `$$...$$` (centers AND keeps the paragraph continuing
+      un-indented after `\]`, unlike `\centerline`); `\resizebox`es only when wider.
+      `\[...\]` is single-line (no top-level `\\`/`&`); `\\` nested in array/pmatrix/
+      cases is fine (verified). overfull 33->28 (>30pt 20->15), worst 135.8->129.1
+      (now a multi-row align), pages-past-edge 13->10, body 9.96pt unchanged, 228pp.
+      Verified render: p121 KL-proof logq/logp display fits + eq(81) full-size tag;
+      p107 DiT — wide `z=x..`(98pt) & `MultiHead=Concat`(120pt) scaled to fit while
+      narrow `Attn`/`head_h` untouched. No regression.
 - [ ] **Lever 2c (align half, part 2) — MULTI-ROW numbered `align`/`alignat`** (36
       align + 1 alignat; now THE remaining overflow incl. worst 135/129/120pt). Can't
       box (loses `&`/per-row (n)). Options: (i) split BODY on `\\`, scale each row in an

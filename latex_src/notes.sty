@@ -91,6 +91,20 @@
 %   * MULTI-row (has \\): leave it exactly as native align by invoking a CLONE of
 %     the genuine environment (\begin{rlgenalign}...) so per-row numbering and the
 %     &-alignment are untouched. (Verified the clone preserves the equation count.)
+% Lever 2d: auto-fit UNNUMBERED \[ ... \] displays. amsmath maps \[...\] to
+% equation*, which we cannot redefine via environ (it is also used inside
+% mdframed theorem boxes and environ mis-scans across them). Instead capture the
+% body in an hbox at display style and emit it inside a plain $$...$$ display
+% (which centers it and — unlike \centerline — keeps the surrounding paragraph
+% continuing un-indented after \], exactly like native \[...\]). The captured
+% box is \resizebox'd to \linewidth only when wider, so displays that already fit
+% are untouched. \[...\] is single-line (no top-level \\ or & allowed), so an
+% hbox is always valid; \\ nested inside array/pmatrix/cases is fine (verified).
+\newsavebox\rldispbox
+\newcommand\rldispstart{\setbox\rldispbox\hbox\bgroup$\small\displaystyle}
+\newcommand\rldispend{$\egroup
+  $$\ifdim\wd\rldispbox>\linewidth
+     \resizebox{\linewidth}{!}{\usebox\rldispbox}\else\usebox\rldispbox\fi$$}
 % \\-detection: append \\\rl@nilmark@ to (one expansion of) \BODY and grab the
 % tokens after the FIRST \\; if that is exactly our marker, there was no real \\.
 \newif\ifrl@multi
@@ -128,6 +142,9 @@
   % Repoint those siblings at the saved genuine end so they close normally.
   \expandafter\let\expandafter\endalignat\csname endrlgenalign\endcsname
   \expandafter\let\expandafter\endflalign\csname endrlgenalign\endcsname
+  % Lever 2d: auto-fit unnumbered \[ ... \] display math (see above).
+  \def\[{\rldispstart}%
+  \def\]{\rldispend}%
 }
 \usepackage{fancyhdr}
 \pagestyle{fancy}
