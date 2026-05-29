@@ -1,37 +1,48 @@
 # Fix Plan
 
-One item per line, top = next. Gate every change on the coverage metric
-(blank-page count must drop, text must not shrink) AND render + look when image
-display works. Commit only verified improvements.
+One item per line, top = next. Larger font + stable printing, design preserved
+(no reflow). Verify every change by metric + render. Commit only verified wins.
+
+## Double-check findings (this restart)
+
+Current delivered fonts: MIT 6.5pt (too small), LeCun 8.1pt, MonoBite 9.7pt;
+all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-- [ ] **Visual confirmation pass** (when image display is reliable): for each
-      paper render a dense body page, the title page, a figure page, and a 2-col
-      page with a mid-page figure. Confirm text readable, nothing cut, figures
-      whole, reading order L→R. Metric is already green (blanks ~0); this is the
-      eyeball sign-off.
-- [ ] **Tune gaps if needed** — `_Flow.INTRA_GAP` (6pt) / `REGION_GAP` (5pt). If
-      pages look cramped or too airy after the visual pass, adjust.
-- [ ] **Optional cleanup** — remove now-unused `pack_slices`,
-      `screen_height_src`, `emit_stacked`, `emit_region` (the continuous `_Flow`
-      replaced them in the split path; crop mode uses none).
+- [ ] **#1 MIT equations split across page boundaries (PRINTING DEFECT).**
+      Rendered MIT p128→p129: equation (68) `TimeEmb(t) = [ ... ]^T` is fragmented
+      — its tall matrix bracket starts at the bottom of p128 and the rows continue
+      on p129. Root cause: an equation is many separate atoms (bracket pieces,
+      matrix rows that are 'text', the eq number) that `region_blocks` does NOT
+      cluster together, so `_Flow` breaks them at the page edge. Fix: cluster ALL
+      atoms (text + fig) belonging to one equation/figure into a single block
+      (e.g. merge atoms whose x-ranges overlap and are vertically adjacent, not
+      just fig-fig). A block taller than the page already gets its own page scaled
+      whole — so once clustered, the equation stays intact. Verify on MIT p128.
+- [ ] **#2 MIT font too small (6.5pt).** Landscape fit of MIT's wide single
+      column only reaches 6.5pt. To enlarge WITHOUT reflow, split each wide
+      single-column page into TOP/BOTTOM sub-pages (vertical halves), each fitting
+      the screen width → ~1.5-2x font (~9-10pt). Must NOT cut a text line or an
+      equation: split only at whitespace between blocks (the _Flow already groups
+      by atoms, so increasing effective width per sub-page is the lever). Keep
+      reading order. Verify font goes up AND #1 stays fixed (no new splits).
+- [ ] **#3 Re-verify all three** against acceptance: font as large as design
+      allows, zero splits/blanks/clipping, MonoBite unchanged.
 
 ## Done
 
-- [x] **Occluded / cut sentences** — region_atoms + pack_slices. (ba45f17 iter1)
-- [x] **Tiny font on 2-col** — two_col_regions band-segmentation. (d122f9e iter2)
-- [x] **Top-align + margin** — emit_region top-align. (3759cd9 iter3)
-- [x] **Collapse whitespace within a page** — region_blocks + emit_stacked. (iter4)
-- [x] **#1 EMPTY PAGES ELIMINATED — continuous cross-page flow** — `_Flow`
-      streams blocks across the whole document; a new device page starts only
-      when full, not per source page. Metric: blank(<15%) pages LeCun 44→0,
-      MonoBite 12→1, MIT 0→0; median coverage 88–100%; page counts DOWN
-      (LeCun 124→72, MIT 178→138); text preserved. (iter5)
+(moved here as completed; see FIXES.md for the running fix log)
+- [x] empty pages eliminated, occluded text fixed, 2col tiny font fixed, landscape
+      for wide single-column (prior iters 1-6; see git log).
 
 ## Known pitfalls
 
-- Only merge FIGURE atoms; merging text lines makes a column one giant tiny block.
+- Reflow is BANNED (destroys design). Use crop/fitw/2col + landscape only.
+- Only merge FIGURE atoms was the old rule; #1 deliberately extends clustering to
+  equation text atoms — be careful NOT to merge whole prose columns into one block
+  (that caused a 112-page blowup before). Cluster only by tight overlap/adjacency.
 - A parse-OK file can still NameError — always run a real conversion.
-- Image render output drops intermittently here; gate on the coverage metric and
-  note when visual confirmation is pending.
+- Image render + temp-file writes drop/corrupt intermittently here. Re-run the
+  metric; if a temp file looks like binary garbage, regenerate it. Gate commits on
+  metric when images won't display, and note "visual pending".

@@ -65,3 +65,15 @@ have not rendered and viewed this iteration.
   remaining win to "fill the empty pages".
 - pack_slices / screen_height_src / emit_region are now UNUSED by the split path
   (kept for reference / crop mode uses none of them). Safe to remove later.
+
+## Restart 2026-05-29 (objective: larger font + stable printing)
+- Double-check found 2 real defects in delivered MIT: (1) eq (68) split across
+  p128->p129 (tall equation fragmented at page edge); (2) font only 6.5pt.
+- LeCun 8.1pt, MonoBite 9.7pt, all 0 blank / 0 clipped. fix_plan #1=eq integrity
+  (cluster equation atoms), #2=top/bottom split MIT wide pages for bigger font.
+- ENV WARNING: this session intermittently corrupts tool output, temp files, and
+  even file-read display (saw binary garbage in a .txt; saw garbled line numbers
+  in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in
+  a fresh/stable loop iteration; always re-run metric and re-render to confirm;
+  regenerate any temp file that looks corrupted. Did NOT attempt #1/#2 inline due
+  to this — left for a clean loop iteration.
