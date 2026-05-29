@@ -602,21 +602,20 @@ def run_reflow(src: "fitz.Document", dev: Device, font_pt: float) -> "fitz.Docum
     import io
     import re
 
-    med = median_font_size(src, _sample_indices(src.page_count)) or 11.0
-    sf = font_pt / med
-
-    def _scale(m: "re.Match") -> str:
-        return f"font-size:{float(m.group(1)) * sf:.1f}pt"
-
     parts: list[str] = []
     for page in src:
         xhtml = page.get_text("xhtml")
         m = re.search(r"<body[^>]*>(.*)</body>", xhtml, re.S)
         body = m.group(1) if m else xhtml
-        parts.append(re.sub(r"font-size:\s*([0-9.]+)pt", _scale, body))
+        # Drop the source's inline font sizes so our CSS size actually wins;
+        # otherwise Story keeps per-span sizes (or its ~12pt default).
+        body = re.sub(r"font-size\s*:\s*[0-9.]+\s*pt\s*;?", "", body)
+        parts.append(body)
 
+    # Force a uniform target body size; bold text still stands out for headings.
     html = (
         '<html><head><meta charset="utf-8"><style>'
+        f'*{{font-size:{font_pt}pt;}}'
         'body{margin:0;line-height:1.35;}'
         'p{margin:0 0 0.4em 0;}'
         'img{max-width:100%;height:auto;}'
