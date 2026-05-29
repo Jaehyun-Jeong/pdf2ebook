@@ -165,16 +165,22 @@ def detect_column_split(page: "fitz.Page", crop: "fitz.Rect") -> float | None:
 # ---------------------------------------------------------------------------
 # Region -> device-sized output page (aspect-preserving, vector)
 # ---------------------------------------------------------------------------
+PAGE_MARGIN = 6.0  # uniform output margin (pt), keeps content off the bezel
+
+
 def emit_region(out: "fitz.Document", src: "fitz.Document", pno: int,
                 clip: "fitz.Rect", dev: Device) -> None:
-    """Place `clip` from src page `pno` onto a new device-sized output page,
-    scaled to fill the width, centred, aspect preserved (no distortion)."""
+    """Place `clip` from src page `pno` onto a new device-sized output page:
+    scaled to fit within a uniform margin, centred horizontally and **top-aligned**
+    so successive pages line up. Aspect preserved (no distortion)."""
     if clip.width <= 1 or clip.height <= 1:
         return
-    scale = min(dev.width_pt / clip.width, dev.height_pt / clip.height)
+    avail_w = dev.width_pt - 2 * PAGE_MARGIN
+    avail_h = dev.height_pt - 2 * PAGE_MARGIN
+    scale = min(avail_w / clip.width, avail_h / clip.height)
     w, h = clip.width * scale, clip.height * scale
-    x = (dev.width_pt - w) / 2
-    y = (dev.height_pt - h) / 2
+    x = (dev.width_pt - w) / 2  # horizontal centre
+    y = PAGE_MARGIN             # top-align
     target = fitz.Rect(x, y, x + w, y + h)
     page = out.new_page(width=dev.width_pt, height=dev.height_pt)
     page.show_pdf_page(target, src, pno, clip=clip)
