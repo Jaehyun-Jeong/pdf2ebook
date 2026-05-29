@@ -245,6 +245,63 @@ def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
     return slices
 
 
+def _merge_y_bands(rects: list["fitz.Rect"], crop: "fitz.Rect") -> list["fitz.Rect"]:
+    """Merge rects with overlapping/adjacent y-intervals into full-width bands."""
+    if not rects:
+        return []
+    rs = sorted(rects, key=lambda r: r.y0)
+    bands = [[rs[0].y0, rs[0].y1]]
+    for r in rs[1:]:
+        if r.y0 <= bands[-1][1] + 2:
+            bands[-1][1] = max(bands[-1][1], r.y1)
+        else:
+            bands.append([r.y0, r.y1])
+    return [fitz.Rect(crop.x0, t, crop.x1, b) for t, b in bands]
+
+
+def estimate_gutter(atoms: list["fitz.Rect"], crop: "fitz.Rect") -> float | None:
+    """Estimate the two-column gutter x from atoms that don't cross the centre.
+    Returns None if the page doesn't actually look two-column."""
+    cx = (crop.x0 + crop.x1) / 2
+    m = crop.width * 0.04
+    col = [a for a in atoms if not (a.x0 < cx - m and a.x1 > cx + m)]
+    lefts = [a for a in col if a.x1 <= cx + m]
+    rights = [a for a in col if a.x0 >= cx - m]
+    if len(lefts) < 3 or len(rights) < 3:
+        return None
+    return (max(a.x1 for a in lefts) + min(a.x0 for a in rights)) / 2
+
+
+def two_col_regions(page: "fitz.Page", crop: "fitz.Rect") -> list["fitz.Rect"]:
+    """Reading-ordered regions for a two-column page. Full-width spans (title,
+    authors, abstract banner, wide figures/tables) become their own full-width
+    region; the two-column bands between them split into left then right. Keeps
+    wide elements intact and reading order correct even when a figure interrupts
+    the columns, and stops whole pages collapsing to one tiny full-width strip."""
+    atoms = region_atoms(page, crop)
+    gutter = estimate_gutter(atoms, crop)
+    if gutter is None:
+        return [crop]  # not really two-column
+
+    cx = (crop.x0 + crop.x1) / 2
+    m = crop.width * 0.04
+    spans = [a for a in atoms if a.x0 < cx - m and a.x1 > cx + m]
+    bands = _merge_y_bands(spans, crop)
+
+    regions: list[fitz.Rect] = []
+    y = crop.y0
+    for band in bands:
+        if band.y0 > y + 2:  # two-column strip above this span
+            regions.append(fitz.Rect(crop.x0, y, gutter, band.y0))
+            regions.append(fitz.Rect(gutter, y, crop.x1, band.y0))
+        regions.append(fitz.Rect(crop.x0, max(y, band.y0), crop.x1, band.y1))
+        y = band.y1
+    if y < crop.y1 - 2:  # trailing two-column strip
+        regions.append(fitz.Rect(crop.x0, y, gutter, crop.y1))
+        regions.append(fitz.Rect(gutter, y, crop.x1, crop.y1))
+    return regions
+
+
 # ---------------------------------------------------------------------------
 # Automatic mode selection
 # ---------------------------------------------------------------------------
@@ -361,15 +418,7 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
         crop = crops.get(i) or page_content_bbox(page) or fitz.Rect(page.rect)
         crop = crop & page.rect
 
-        if two_col:
-            split_x = detect_column_split(page, crop)
-            regions = (
-                [fitz.Rect(crop.x0, crop.y0, split_x, crop.y1),
-                 fitz.Rect(split_x, crop.y0, crop.x1, crop.y1)]
-                if split_x else [crop]
-            )
-        else:
-            regions = [crop]
+        regions = two_col_regions(page, crop) if two_col else [crop]
 
         for region in regions:
             atoms = region_atoms(page, region)
