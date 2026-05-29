@@ -472,3 +472,44 @@ architecture.
   amsmath numbering (MUST preserve equation count), OR landscape the worst few.
 - COUNTER: code-change iter; two-clean STOP counter N/A until align-half done +
   fresh double-check. Deliverable NOT regenerated yet (overflow not ~0).
+
+## iter 2026-05-29 (Lever 2c align-half SINGLE-ROW — auto-fit numbered align — overfull 55->33/pass)
+- Remaining overflow after 2a/2b/2c-equation was ALL numbered `align` (100 envs;
+  worst 189/173/163/161pt). align is NOT a simple begin/end like equation: it is
+  built on \halign via \start@align, so it CANNOT be re-entered by \let-ing its
+  begin/end (proved: "weird error", double-counts), and a multi-row body (&/\\)
+  can't be boxed without destroying alignment + per-row numbers.
+- SPLIT THE PROBLEM by row count. Detection: `\rl@detectbreak` appends \\\marker to
+  one expansion of \BODY, grabs tokens after the FIRST \; if == marker, no real \\.
+  (environ's \BODY is \edef'd w/ \unexpanded, so ONE \expandafter reveals the body.)
+  Verified SINGLE/MULTI/SINGLE on standalone. Counts: 64 single-row, 36 multi-row;
+  only 1 align block uses \nonumber and it's multi-row (so all 64 single-row are
+  plainly numbered → safe).
+- SINGLE-ROW (no \\): numerically identical to an `equation` (shared equation
+  counter, one number) → route through the proven equation machinery:
+  `\rloldequation\rlfitnum{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}\rloldendequation`.
+  \aligned keeps any inner & alignment; \rlfitnum \resizeboxes to \linewidth-26pt
+  only when wider; equation emits (n) full-size in margin. equation CENTERS it
+  (cleaner than re-entering align which left-aligns at axis).
+- MULTI-ROW (has \\): CLONE genuine align under a private name and call it by
+  \begin/\end so \@currenvir is set up properly:
+  `\expandafter\let\csname rlgenalign\endcsname\align` (+ end), then
+  `\begin{rlgenalign}\BODY\end{rlgenalign}`. Standalone-verified the clone keeps
+  the equation COUNT exactly (single=1, multi 2-row=2,3, next=4) and \cref labels.
+- BUG FOUND+FIXED mid-iter (build exit 12): \RenewEnviron{align} clobbers \endalign,
+  and amsmath's \endalignat/\endflalign are literally "\endalign" (\meaning checked)
+  → the numbered alignat in part_04 (Thm 17 SDE-extension) broke with cascading
+  Missing }/$/\cr at \end{alignat}. FIX: after redefining align, repoint
+  `\let\endalignat\endrlgenalign` + `\let\endflalign\endrlgenalign` (saved genuine end).
+- VERIFIED: build exit 0, 0 errors, 228pp, body font median 9.96pt UNCHANGED.
+  overfull/pass 55->33 (>30pt 34->20), worst 189->135pt, pages-past-right-edge(block)
+  16->13. Rendered+Read: p64 eq(39) (the worst 189pt \nabla\log chain) now fits the
+  column, vector+correct, full-size (39); p81 eq(54) DSM loss + "(denoising score
+  matching loss)" annotation fits w/ full-size (54); p146 clean body; p186 multi-row
+  eqs(115-118) native — per-row numbers + = alignment intact, STILL overflow (= next
+  lever, not regression); p68 alignat Thm17 (44/45) renders unbroken.
+- REMAINING OVERFLOW = MULTI-ROW align (36) + numbered alignat (1) only; worst now
+  135/129/120pt. Next: Lever 2c part-2 — split-and-tag per row (\\-split verified safe:
+  ~0 align blocks have nested \\ matrix/cases) OR landscape the stubborn few.
+- COUNTER: code-change iter; two-clean STOP counter N/A until multi-row done + fresh
+  double-check. Deliverable NOT regenerated (overflow not ~0 yet).

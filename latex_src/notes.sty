@@ -79,6 +79,26 @@
   \else
     \usebox\rlnumbox
   \fi}
+% Lever 2c (align half): auto-fit NUMBERED `align`. amsmath's align is NOT a
+% simple begin/end pair (it is built on \halign via \start@align), so unlike
+% `equation` it cannot be re-entered by \let-ing its begin/end macros, nor can a
+% multi-row body (with &/\\) be boxed without destroying its alignment + numbers.
+% Strategy: detect whether \BODY contains a row break \\.
+%   * SINGLE-row (no \\): numerically identical to an `equation` (same equation
+%     counter, one number), so route it through the proven equation machinery —
+%     box the body in an \aligned (to keep any inner & alignment), \resizebox it
+%     to the column when wider, and let equation emit the (n) at full size.
+%   * MULTI-row (has \\): leave it exactly as native align by invoking a CLONE of
+%     the genuine environment (\begin{rlgenalign}...) so per-row numbering and the
+%     &-alignment are untouched. (Verified the clone preserves the equation count.)
+% \\-detection: append \\\rl@nilmark@ to (one expansion of) \BODY and grab the
+% tokens after the FIRST \\; if that is exactly our marker, there was no real \\.
+\newif\ifrl@multi
+\long\def\rl@splitbb#1\\#2\rl@END{\def\rl@rest{#2}}
+\def\rl@onlymark{\rl@nilmark@}
+\def\rl@detectbreak{%
+  \expandafter\rl@splitbb\BODY\\\rl@nilmark@\rl@END
+  \ifx\rl@rest\rl@onlymark\rl@multifalse\else\rl@multitrue\fi}
 % Deferred: amsmath (which defines align*/equation*/equation) loads later.
 \AtBeginDocument{%
   \RenewEnviron{align*}{\rldisplay{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}}%
@@ -91,6 +111,23 @@
   \let\rloldequation\equation
   \let\rloldendequation\endequation
   \RenewEnviron{equation}{\rloldequation\rlfitnum{$\small\displaystyle\BODY$}\rloldendequation}%
+  % Lever 2c (align half): clone genuine align under a private name for the
+  % multi-row pass-through, then redefine align to auto-fit only single-row.
+  \expandafter\let\csname rlgenalign\endcsname\align
+  \expandafter\let\csname endrlgenalign\endcsname\endalign
+  \RenewEnviron{align}{%
+    \rl@detectbreak
+    \ifrl@multi
+      \begin{rlgenalign}\BODY\end{rlgenalign}%
+    \else
+      \rloldequation\rlfitnum{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}\rloldendequation
+    \fi}%
+  % amsmath shares one end routine: \endalignat and \endflalign are literally
+  % "\endalign". Redefining the align environment above clobbered \endalign with
+  % environ's cleanup, which would break the (numbered) alignat used in part_04.
+  % Repoint those siblings at the saved genuine end so they close normally.
+  \expandafter\let\expandafter\endalignat\csname endrlgenalign\endcsname
+  \expandafter\let\expandafter\endflalign\csname endrlgenalign\endcsname
 }
 \usepackage{fancyhdr}
 \pagestyle{fancy}

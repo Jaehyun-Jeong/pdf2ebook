@@ -52,16 +52,25 @@ off), p124, p191, p192, p199, p218.
       unchanged, 229pp. Verified render: p122 eq(83) 3-line aligned body fits w/
       full-size (83); p100 wide eq(68) TimeEmb scaled+fits while narrow eq(69)
       untouched; p110 figure/body clean. No regression.
-- [ ] **Lever 2c (align half) — auto-fit NUMBERED `align`** (100 envs; THE bulk +
-      all worst boxes now: 189/173/163/161/149pt are align — part_04:27/344,
-      part_03:107, part_07:266, fokker_planck:81). HARD: align is a display env
-      with `&`/`\\` tabs so it can't be boxed (the equation trick above won't
-      work), and per-row independent scaling breaks `=` alignment + drops the (n)
-      tags / shifts the equation count (breaks \cref). Options: (i) split BODY on
-      `\\`, scale each row's math in an `\aligned`-of-one but re-attach an explicit
-      `\tag`/`\notag` per row mirroring amsmath's numbering (must preserve count!);
-      (ii) `breqn` `dgroup` (risks custom macros); (iii) landscape (Lever 3) the
-      handful that truly can't shrink. Test on part_04:27 first. Keep (n) correct.
+- [x] **Lever 2c (align half) — SINGLE-ROW numbered `align`** (64 of 100). DONE
+      (this iter): `\\`-detection (`\rl@detectbreak`) splits align into single- vs
+      multi-row. Single-row is numerically an `equation` (same counter, one number)
+      so route it through the proven equation re-entry, wrapping `\BODY` in `\aligned`
+      to keep inner `&` then `\rlfitnum`-resizing to the column. Multi-row invokes a
+      CLONE of genuine align (`rlgenalign`) — preserves per-row (n) tags + `=`
+      alignment exactly. CAVEAT FIXED: amsmath `\endalignat`/`\endflalign` are literal
+      `\endalign`; redefining align clobbered `\endalign` → repointed them to the saved
+      genuine end. overfull/pass 55→33 (>30pt 34→20), worst 189→135pt, pages-past-edge
+      16→13, body 9.96pt unchanged, 228pp. Verified render: p64 eq(39) (was 189pt) fits
+      w/ full-size (39); p81 eq(54) DSM-loss + margin annotation fits; p186 eqs115-118
+      multi-row native intact (still overflow=next); p68 alignat Thm17 (44/45) unbroken.
+- [ ] **Lever 2c (align half, part 2) — MULTI-ROW numbered `align`/`alignat`** (36
+      align + 1 alignat; now THE remaining overflow incl. worst 135/129/120pt). Can't
+      box (loses `&`/per-row (n)). Options: (i) split BODY on `\\`, scale each row in an
+      `\aligned`-of-one + explicit `\refstepcounter`+`\tag` mirroring amsmath numbering
+      (MUST preserve count — \\-split is SAFE here: verified ~0 align blocks have nested
+      `\\` matrix/cases); (ii) landscape (Lever 3) the handful that truly can't shrink.
+      Test on fokker_planck:81 (eqs115-118) + part_04 alignat (44/45) first. Keep (n)+\cref.
 - [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
       Only for genuinely un-shrinkable wide equations/tables; read sideways.
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
