@@ -711,3 +711,17 @@ architecture.
   trajectory grids whole, caption w/ Theorem 3 / Equation (20) links, nothing past
   edge). No overflow, no clip, design intact. No NEW defect, input unchanged => STOP
   holds, no code change.
+
+## iter 2026-05-29 (re-fire #7 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: git clean, input unchanged
+  (papers/ = MIT only, same bytes May 29 10:24), deliverable byte-identical to main.pdf
+  (12814730 bytes). Metric on main.pdf: 224pp, 257.3x347.5pt, text-past-edge=0,
+  draw-past-edge=0, worst 0.0pt; dominant body span 10.0pt (11905 spans), selectable —
+  IDENTICAL to recorded STOP metric (deterministic build). Rendered + Read TWO fresh
+  pages distinct from all prior sets: p77 (§4.3 Score Matching — the wide 3-row CSM-loss
+  derivation L_CSM(θ) w/ the (i) equality step + nested squared norms fits the column,
+  full eq intact, bold "denoising score matching"/"noise predictor" tags, blue Equation
+  (28) link, body ~10pt) and p145 (§7.2.1 Conditional/Marginal Probability Path — the
+  p_0(·|z)=p_init/p_1(·|z)=δ_z and Σ_{z∈S} p_t(x|z)p_data(z) marginal displays fit,
+  eq(89) full-size margin number, bold term-tags, body ~10pt). No overflow, no clip,
+  design intact. No NEW defect, input unchanged => STOP holds, no code change.
