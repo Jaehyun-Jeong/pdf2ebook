@@ -180,6 +180,30 @@ have not rendered and viewed this iteration.
   If the loop re-fires: re-run metric + render two page-sets; only reopen if a
   NEW defect appears or the input set changes.
 
+## iter 2026-05-29 (restart double-check NOT clean — word-tag eq labels fixed)
+- Restart required a fresh double-check (prior session had STOPped). Ran a workflow
+  of 12 parallel vision inspectors over TWO independent page-sets (A {3,18,48,78,
+  108,138}, B {10,33,60,95,120,135}). 11/12 clean; ONE real defect: out p134
+  "(reconstruction sampler)" / "(generative sampler)" floating detached below
+  their r^recon/r^gen equations. So the loop REOPENED (did NOT stay stopped).
+- ROOT CAUSE: the #5 detached-label fix only set aside NUMERIC labels (EQNUM_RE)
+  whose x0 > region.x0+0.75*width. On src p80 these are right-ALIGNED WORD tags on
+  the SAME y-band as their equation, but long words => left edge x0≈409/427 (vs
+  numeric labels ≈532). They failed BOTH the numeric regex and the 0.75 gate, so
+  flowed as lone atoms detached below the equation.
+- FIX (one change): broadened the set-aside to any lone fully-parenthesised line
+  (EQTAG_RE = ^\(.+\)$) and relaxed the gate 0.75->0.65 of region width. 0.65 puts
+  the threshold at x0≈386 (catches 409/427) while left-anchored prose (x0≈58, ~10%
+  in) and left-anchored heading parentheticals like Remark 42's "(What Happens...)"
+  never match. Re-attachment is the SAME #5 band-union machinery (no reflow).
+- Verified: out p134 both tags right-aligned ON their rows (gone); numeric regress
+  p124 eq 115-118 + inline "(for all f...)" tags still attached/no-dup; p133 ELBO/
+  Remark 42 unchanged. Metric 142->141 pages (2 stranded tag-lines collapse back),
+  6.54pt, blank 0, cov med 96.4%. papers/ereader/ regenerated.
+- COUNTER RESET: this restart's double-check was DIRTY (found a defect), so the
+  two-consecutive-clean counter is 0. NEXT loop: double-check from scratch (render
+  2 fresh page-sets, Read every page) before any STOP.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in

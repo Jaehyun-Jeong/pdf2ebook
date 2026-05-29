@@ -10,9 +10,21 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-(empty — acceptance met; see STOP below)
+(empty — last defect fixed this iter; needs a fresh two-pass double-check
+before STOP can be re-asserted, since this restart's double-check was DIRTY.)
 
-## STOP — acceptance met (2026-05-29)
+## Reopened 2026-05-29 — restart double-check found a NEW defect (now fixed)
+
+- [x] **Detached equation WORD tags.** Restart double-check (workflow, 12 pages,
+      2 sets) found out p134: "(reconstruction sampler)" / "(generative sampler)"
+      floating detached below their equations. #5 only re-attached NUMERIC labels
+      and gated x0>0.75*width; these long word-tags start at x0≈409 (right-aligned
+      but left edge well left of numeric labels at ≈532) so slipped both. FIX:
+      EQTAG_RE (^\(.+\)$) + gate relaxed to 0.65*width. Verified — see FIXES.md.
+      NOTE: this restart's double-check was DIRTY, so the two-consecutive-clean
+      counter RESETS; next loop must double-check from scratch before any STOP.
+
+## Prior STOP — acceptance met (2026-05-29) [superseded by reopen above]
 
 - [x] **#4 Re-verify against acceptance — DONE, two consecutive clean passes.**
       Fresh double-check (no code change this iter): regenerated /tmp/mit.pdf and

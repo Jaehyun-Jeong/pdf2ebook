@@ -66,6 +66,24 @@ needs parens; eq (70)/Remark 29/Figure 14/Summary 45 intact) + metric (pages
 149->142 as ~7 stranded number-lines collapse back, font 6.54pt unchanged, blank 0,
 coverage median 96.3% min 52.2%).
 
+iter (detached word-tag eq labels): FIXED MIT detached equation WORD tags
+"(reconstruction sampler)" / "(generative sampler)" (src p80, out p134) floating
+in the right-margin dead space below their r^recon / r^gen equations. Root cause:
+the #5 re-attach logic set aside only NUMERIC labels (EQNUM_RE) AND gated on
+x0 > region.x0+0.75*width. These word tags are right-ALIGNED on the same y-band
+as their equation, but being long words their left edge starts at x0≈409/427
+(vs numeric labels at ≈532), so they (a) didn't match the numeric regex and
+(b) failed the 0.75 gate — flowing detached as lone atoms below the equation.
+FIX: broadened the set-aside predicate to any lone fully-parenthesised line
+(new EQTAG_RE = ^\(.+\)$) and relaxed the right-margin gate 0.75->0.65 of region
+width (catches x0≈409 while left-anchored prose at x0≈58 / ~10% in never matches).
+The existing band re-attachment then unions each tag into the equation block
+straddling its y-centre (NO reflow; placed at true position). Verified by render
+(out p134 both tags now right-aligned ON their equation rows, defect gone;
+numeric regression out p124 eq 115-118 + "(for all f...)" tags still attached,
+no dup; p133 ELBO/Remark 42 unchanged) + metric (pages 142->141 as the two
+stranded tag-lines collapse back, font 6.54pt unchanged, blank 0, cov med 96.4%).
+
 iter (re-verify #4, no code change): STOP — acceptance met. Fresh from-scratch
 double-check found ZERO printing defects across TWO independent page-sets
 (pass1 {0,12,40,70,100,130}, pass2 {6,25,55,85,115,141}): equations intact with

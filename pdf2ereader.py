@@ -253,9 +253,12 @@ def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
 
 
 _PAGENUM_RE = re.compile(r"(?:\d{1,4}|[ivxlcdm]{1,8})", re.IGNORECASE)
-# A lone equation label like "(118)" or "(3.2)" (allow a leading tag such as
-# "(2.14)"); matched against a right-margin line to re-attach it to its row.
+# A lone right-margin equation tag to re-attach to its row. Two flavours:
+# numeric labels like "(118)"/"(3.2)" AND right-aligned word tags like
+# "(reconstruction sampler)". Both sit wholly inside one paren group; the
+# right-margin x0 gate (below) keeps left-anchored prose from matching.
 EQNUM_RE = re.compile(r"^\(\d+(?:\.\d+)?\)$")
+EQTAG_RE = re.compile(r"^\(.+\)$")
 
 
 def _is_furniture(line_bbox, text: str, page_rect: "fitz.Rect") -> bool:
@@ -301,13 +304,16 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
                     continue  # drop running header / page-number footer
                 r = fitz.Rect(line["bbox"]) & region
                 if r.width > 1 and r.height > 1:
-                    # A lone "(n)" parked in the right margin is an equation
-                    # number. A ~25pt alignment gap separates it from its
-                    # equation row (wider than the merge reach below), so it
-                    # would otherwise flow detached into the dead space under
-                    # the equation. Set it aside to re-attach to its band.
-                    if (EQNUM_RE.match(ltxt.strip())
-                            and r.x0 > region.x0 + 0.75 * region.width):
+                    # A lone parenthetical tag parked in the right margin is an
+                    # equation label — a number "(n)" or a word tag like
+                    # "(reconstruction sampler)". A wide alignment gap separates
+                    # it from its equation row (wider than the merge reach
+                    # below), so it would otherwise flow detached into the dead
+                    # space under the equation. Set it aside to re-attach to its
+                    # band. The right-margin x0 gate keeps left-anchored prose
+                    # (which starts at the left margin) from ever matching.
+                    if (EQTAG_RE.match(ltxt.strip())
+                            and r.x0 > region.x0 + 0.65 * region.width):
                         eqnums.append(r)
                     else:
                         texts.append(r)
