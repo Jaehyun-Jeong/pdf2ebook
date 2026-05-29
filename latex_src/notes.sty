@@ -44,6 +44,29 @@
 % they fit the column while body prose stays ~10pt. Appended (expandafter) so any
 % amsmath everydisplay tokens are preserved. Inline math is untouched.
 \AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\small}}
+% --- Ralph loop Lever 2: auto-fit wide UNNUMBERED display math to the column ---
+% align*/equation* bodies wider than \linewidth are uniformly scaled down with
+% \resizebox (stays vector, correct & selectable); bodies that already fit keep
+% their natural \small size untouched. Numbered envs (align/equation) are handled
+% separately because the (n) tag needs reserved horizontal space.
+\usepackage{environ}
+\newsavebox\rlfitbox
+\newcommand\rlfit[1]{%
+  \sbox\rlfitbox{#1}%
+  \ifdim\wd\rlfitbox>\linewidth
+    \resizebox{\linewidth}{!}{\usebox\rlfitbox}%
+  \else
+    \usebox\rlfitbox
+  \fi}
+% Emit a centered display of the (possibly resized) box. We avoid \[ ... \]
+% because in this preamble \[ maps to equation*, which our environ redefinition
+% would re-trigger and mis-nest. \centerline builds the display manually.
+\newcommand\rldisplay[1]{\par\addvspace{\abovedisplayskip}%
+  \centerline{\rlfit{#1}}\addvspace{\belowdisplayskip}}
+% Deferred: amsmath (which defines align*/equation*) loads later in this file.
+\AtBeginDocument{%
+  \RenewEnviron{align*}{\rldisplay{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}}%
+}
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhead[L]{\rightmark}
