@@ -195,3 +195,23 @@ pages-past-right-edge 19->16, body font median 9.96pt UNCHANGED. Verified render
 out-p122 eq(83) 3-line VAE loss fits w/ full-size number; out-p100 wide eq(68)
 TimeEmb scaled+fits while narrow eq(69) untouched; out-p110 figure/body clean.
 Remaining overflow = numbered align (100 envs, all worst boxes) — Lever 2c align-half.
+
+## FINAL — defect resolved + deliverable regenerated (2026-05-29)
+Clean rebuild (`latexmk -C` then full build): exit 0, `latex_src/main.pdf`, 224pp,
+page 257.3x347.5pt (exact 6" Kindle). METRICS at acceptance:
+- pages with text-block past paper edge: **0**; draw past paper edge: **0**.
+- Overfull \hbox total 21; **>30pt: 0**; worst residual **24.0pt** — all <=24pt
+  margin-spill into the 7.2pt geometry margin (linewidth ~243 < pagewidth 257.3,
+  still ON the paper, no visible cut-off).
+- Body prose font = **10.0pt** (dominant span size, 11905 spans); within 8-10pt.
+  (median across ALL spans incl. sub/superscripts + display math is 9.0pt.)
+- Text selectable (vector), design identical (theorem/example/remark boxes,
+  blue/green semantic colors, hyperlinks, figures).
+TWO independent double-check render passes (10 distinct pages):
+- pass 1: p68 (Thm17 eq44/45 alignat in box), p94 (CFG align+margin notes),
+  p124 (VAE remark body), p191 (VAE eqs 133-137 underbraces+colors), p218 (Fig14 DiT/CLIP).
+- pass 2: p55 (L_FM proof (i)-(iv) multi-row align+QED), p64 (eq39 wide equality chain,
+  was 189pt over), p107 (DiT MultiHead eqs), p122 (VAE single-line loss), p40 (eqs12-14).
+All fit; equations correct full-size-numbered vector math; body 10pt; no regression.
+DELIVERED: `latex_src/main.pdf` -> `papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf`
+(224pp, 257.3x347.5pt, selectable). The wide-equation overflow objective is COMPLETE.

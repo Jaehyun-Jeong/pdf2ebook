@@ -102,10 +102,14 @@ off), p124, p191, p192, p199, p218.
 - [~] **Lever 3 — landscape (`pdflscape`).** NOT NEEDED: zero pages past the paper edge
       after part-3. The 14 residual overfull \hbox are all ≤24pt (margin-spill into the
       7.2pt geometry margin, linewidth ~243pt < pagewidth 257.3pt — still on the paper).
-- [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
-      two independent double-check render passes (include p94/p124/p191/p218),
-      then copy main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf.
-      Record final body font + overflow count in FIXES.md.
+- [x] **Re-verify + document + deliver.** DONE (this iter): clean rebuild exit 0,
+      224pp. METRICS: pages-past-paper-edge 0, draw-past-edge 0, overfull>30pt 0
+      (worst 24.0pt margin-spill, still ON paper), body prose 10.0pt (dominant span).
+      TWO independent double-check render passes, 10 distinct pages: pass1 p68/p94/
+      p124/p191/p218, pass2 p55/p64/p107/p122/p40 — all fit, equations correct
+      full-size-numbered vector, body 10pt, design intact, no regression. DELIVERED:
+      main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf
+      (224pp, 257.3x347.5pt, selectable). Recorded in FIXES.md. **OBJECTIVE COMPLETE.**
 
 ## Known pitfalls
 
