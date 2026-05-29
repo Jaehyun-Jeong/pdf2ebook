@@ -619,3 +619,19 @@ architecture.
   main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf + record
   final body font + overflow in FIXES.md.
 - COUNTER: code-change iter; two-clean STOP counter N/A until the fresh double-check.
+
+## iter 2026-05-29 (FINAL — re-verify + deliver; OBJECTIVE COMPLETE)
+- Clean rebuild (`latexmk -C` + full build): exit 0, 224pp, 257.3x347.5pt.
+- ACCEPTANCE METRICS: pages-past-paper-edge 0, draw-past-edge 0, overfull>30pt 0
+  (worst residual 24.0pt = margin-spill into 7.2pt geometry margin, linewidth 243
+  < pagewidth 257.3, still ON paper). Body prose = 10.0pt (dominant span, 11905
+  spans); all-span median 9.0pt (incl. sub/superscripts + display math). Selectable.
+- TWO independent double-check render+Read passes, 10 distinct pages:
+  pass1 p68/p94/p124/p191/p218; pass2 p55/p64/p107/p122/p40. Every equation fits,
+  correct full-size-numbered vector math, body 10pt, theorem/example/remark boxes +
+  blue/green colors + hyperlinks + figures intact. NO regression on any page.
+- DELIVERED: main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf
+  (224pp, 257.3x347.5pt, selectable). Recorded in FIXES.md. Committed e8390da.
+- STOP: acceptance criteria met (0 overflow pages, body 8-10pt, equations correct,
+  design preserved, two consecutive clean double-check passes). The wide-equation
+  overflow objective is COMPLETE. No further iterations needed.
