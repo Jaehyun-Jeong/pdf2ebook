@@ -331,6 +331,22 @@ have not rendered and viewed this iteration.
   blanks/clips/detached labels. No NEW defect, input unchanged => STOP holds, no
   code change. Deliverable already current (papers/ereader/ regenerated 11:59).
 
+## iter 2026-05-29 (re-fire #3 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: input unchanged
+  (papers/ = MIT only, same bytes May 29 10:24); ast.parse OK; regenerated
+  /tmp/mit.pdf = 146 pp, median 6.89pt (p10=4.82 p90=6.89), 0 blank, cov med
+  100.4% / min 54.48% — IDENTICAL to recorded STOP metric (deterministic output).
+  Rendered + Read TWO fresh page-sets distinct from all prior (14 pages total:
+  {5,16,27,38,48,58,70,82,92,103,115,128,138,143}). Dispatched a 14-parallel
+  vision-inspector workflow → allClean:true, defects:[]. Also Read p070 (§6.1 dense
+  body, complete lines, page break between a complete lead-in and its equation =
+  allowed atom break, not stranding) and p115 (Algorithm 13/14 + Figure 20 masked-
+  diffusion grid whole + body, correct order) directly — both clean. No NEW defect,
+  input unchanged => STOP holds, no code change. Deliverable current (papers/ereader/
+  regenerated 11:59). 8pt remains geometrically impossible on 6" (body ~497pt vs
+  landscape 347.5pt long edge → ceiling ~6.9pt); only reflow / line-cut (banned) or
+  a wider device (user declined) could reach it.
+
 ## iter 2026-05-29 (re-fire #2 — protocol re-verify, STOP holds)
 - Loop re-fired again post-convergence. Re-fire protocol: input set unchanged
   (papers/ = MIT only, same bytes); ast.parse OK; regenerated /tmp/mit.pdf = 146 pp,
