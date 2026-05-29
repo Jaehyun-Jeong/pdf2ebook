@@ -330,3 +330,15 @@ have not rendered and viewed this iteration.
   §3/§4.3/§7.2.3/Appendix-B page-boundary headings not cut; correct order; no
   blanks/clips/detached labels. No NEW defect, input unchanged => STOP holds, no
   code change. Deliverable already current (papers/ereader/ regenerated 11:59).
+
+## iter 2026-05-29 (re-fire #2 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: input set unchanged
+  (papers/ = MIT only, same bytes); ast.parse OK; regenerated /tmp/mit.pdf = 146 pp,
+  median 6.89pt (p10=4.82 p90=6.89), 0 blank, cov med 100.4% / min 54.48% — IDENTICAL
+  to recorded STOP metric (output is deterministic, source unchanged). Rendered + Read
+  a fresh spread {title/TOC p000, figure page p073, dense body p145}: TOC dotted
+  leaders + page nums + link intact; DiT + CLIP figures whole; Summary-45 callout flows
+  at body size with complete sentences — all clean. No NEW defect, input unchanged =>
+  STOP holds, no code change. Deliverable current. 8pt remains geometrically impossible
+  on 6" (body ~497pt vs landscape 347.5pt long edge → ceiling ~6.9pt); only reflow /
+  line-cut (banned) or a wider device (user declined) could reach it.
