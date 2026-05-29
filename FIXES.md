@@ -47,7 +47,7 @@ by metric (blank pages 1->0, min coverage 0.4%->1.95%, font 6.54pt unchanged,
 reading order with equations intact; Figure 14 on p73 fully preserved — guard
 spared the real figure).
 
-iter (b06eb56): FIXED MIT detached/duplicated equation numbers (fix_plan
+iter (d503a36): FIXED MIT detached/duplicated equation numbers (fix_plan
 #5) — display-equation labels like (115)-(131) (src page 73) sit ~25pt past the
 equation body in the right margin, wider than the text-merge reach (infl_x=16),
 so they never fused into their equation block. They flowed as separate atoms AFTER
