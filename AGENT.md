@@ -241,3 +241,17 @@ have not rendered and viewed this iteration.
   unreachable on 6". Never claim 8pt unless metric+render show it.
 - Equation-integrity (#1), furniture-strip (#3), callout-box (#6), eq-num/word-tag
   (#5) fixes are DONE — do not regress while chasing font.
+
+## iter 2026-05-29 (Lever 1 — device margin 6pt→2pt — font 6.54→6.70pt)
+- PAGE_MARGIN 6.0 → 2.0. Content is width-fit so each margin pt directly shrinks
+  font; landscape avail_w 335.5 → 343.5pt → fit scale +2.4% → median font
+  6.54 → 6.70pt (p90 6.62→6.78), pages 141 (unchanged), 0 blank, cov med 96.4→
+  98.5% (min 49.59% — content sits closer to edge but well within; NO clipping).
+- Verified by render+Read: p40 (eq 39-42 + Example/Prop callouts), p90 (dense
+  body eq 84-86), p125 (eq 119-124), p73 (DiT figure). All intact, nothing
+  clipped, comfortable L/R whitespace remains. Committed.
+- NEXT: Lever 2 (crop to TRUE text bbox, not the inflated ~508 crop) and Lever 3
+  (per-region width-fit so a rare wide element doesn't shrink the whole page).
+  Could also push margin 2→0-1pt for ~+0.06pt but deferred (bezel safety).
+- COUNTER: this is a code-change iter (not a re-verify), so the two-clean STOP
+  counter is N/A until Levers 2/3 are exhausted and a fresh double-check runs.

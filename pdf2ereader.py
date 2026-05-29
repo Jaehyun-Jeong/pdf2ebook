@@ -166,7 +166,7 @@ def detect_column_split(page: "fitz.Page", crop: "fitz.Rect") -> float | None:
 # ---------------------------------------------------------------------------
 # Region -> device-sized output page (aspect-preserving, vector)
 # ---------------------------------------------------------------------------
-PAGE_MARGIN = 6.0  # uniform output margin (pt), keeps content off the bezel
+PAGE_MARGIN = 2.0  # uniform output margin (pt), keeps content off the bezel
 
 
 def emit_region(out: "fitz.Document", src: "fitz.Document", pno: int,

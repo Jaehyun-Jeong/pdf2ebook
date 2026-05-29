@@ -16,9 +16,10 @@ document the achieved font and why 8pt is unreachable on 6".
 
 ## To do
 
-- [ ] **Lever 1 — minimize device PAGE_MARGIN (6pt → 2pt, try 0–1pt).** Content
-      is width-fit, so each margin pt shrinks font. Re-measure median font; verify
-      nothing clips the page edge. Expect ~6.5 → ~6.8–6.9pt.
+- [x] **Lever 1 — minimize device PAGE_MARGIN (6pt → 2pt).** DONE. Font 6.54 →
+      6.70pt, 141 pages, 0 blank, cov med 96.4 → 98.5%, nothing clipped (rendered
+      p40/p90/p125/p73). See FIXES.md. (Could push to 0–1pt for ~+0.06pt more —
+      deferred; revisit after Levers 2/3 in case they want the bezel margin back.)
 - [ ] **Lever 2 — crop to the TRUE text bbox, not the inflated ~508pt crop.**
       Fit to the real ~497pt column. Verify no real glyph trimmed. Expect small
       additional font gain.

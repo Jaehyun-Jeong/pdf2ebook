@@ -104,3 +104,17 @@ correct reading order. Metric: 142 pages, font 6.54pt (at the ~6.6pt design-
 preserving geometric ceiling), 0 blank, coverage median 96.3% / min 52.23%
 (p100 = clean paragraph end, not stranded). Two consecutive clean double-checks
 + clean metric + font at ceiling => loop objective complete.
+
+iter (Lever 1 — minimize device margin, font win): PAGE_MARGIN 6.0pt -> 2.0pt.
+Content is width-fit, so each device-margin point directly shrinks the font. On
+the 6" landscape long edge the available width goes 335.5pt -> 343.5pt, so the
+whole-line fit scale rises ~2.4%. Verified: median body font 6.54pt -> 6.70pt
+(p90 6.62 -> 6.78), pages 141 (unchanged), 0 blank, coverage median 96.4% ->
+98.5% (min 49.59%, slightly lower because content now sits closer to the page
+edge but well within it). Rendered + Read dense body (p40,p90), equation
+(p125 eq 119-124, p40 eq 39-42), and figure/DiT (p73) pages: equations intact
+with attached numbers, callout boxes at body size, NOTHING clipped at the page
+edge (comfortable left/right whitespace remains — tighter margin only enlarged
+content, did not push it off). Lever 1 of the retarget done; next: Lever 2
+(crop to true text bbox) and Lever 3 (per-region width-fit), or push margin
+lower (0-1pt) if a further safe gain is wanted.
