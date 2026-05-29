@@ -659,3 +659,15 @@ architecture.
   masked-diffusion token grid whole, gray callout box intact, body ~10pt, nothing past
   edge). No overflow, no clip, design intact. No NEW defect, input unchanged => STOP
   holds, no code change.
+
+## iter 2026-05-29 (re-fire #3 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: git clean, input unchanged
+  (papers/ = MIT only), deliverable byte-identical to main.pdf (12814730 bytes). Metric
+  on main.pdf: 224pp, 257.3x347.5pt, text-past-edge=0, draw-past-edge=0, worst 0.0pt;
+  dominant body span 10.0pt (11905 spans), selectable — IDENTICAL to recorded STOP
+  metric (deterministic build). Rendered + Read TWO fresh pages distinct from all prior
+  sets: p150 (§7.2 — Proposition 2 KFE callout box, d/dt p_t = Σ Q_t(x|y)p_t(y) display
+  fits the column, bold-blue KFE link, body ~10pt) and p205 (forward-process/time-reversal
+  prose w/ inline u_t^target, ∇log p_t math + bold term-tags + blue citation links, body
+  ~10pt). No overflow, no clip, design intact. No NEW defect, input unchanged => STOP
+  holds, no code change.
