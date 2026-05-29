@@ -77,13 +77,25 @@ off), p124, p191, p192, p199, p218.
       Verified render: p121 KL-proof logq/logp display fits + eq(81) full-size tag;
       p107 DiT — wide `z=x..`(98pt) & `MultiHead=Concat`(120pt) scaled to fit while
       narrow `Attn`/`head_h` untouched. No regression.
-- [ ] **Lever 2c (align half, part 2) — MULTI-ROW numbered `align`/`alignat`** (36
-      align + 1 alignat; now THE remaining overflow incl. worst 135/129/120pt). Can't
-      box (loses `&`/per-row (n)). Options: (i) split BODY on `\\`, scale each row in an
-      `\aligned`-of-one + explicit `\refstepcounter`+`\tag` mirroring amsmath numbering
-      (MUST preserve count — \\-split is SAFE here: verified ~0 align blocks have nested
-      `\\` matrix/cases); (ii) landscape (Lever 3) the handful that truly can't shrink.
-      Test on fokker_planck:81 (eqs115-118) + part_04 alignat (44/45) first. Keep (n)+\cref.
+- [x] **Lever 2c (align half, part 2) — MULTI-ROW numbered `align`.** DONE (this
+      iter): the split-and-tag option was UNSAFE (a `\nonumber`-first-row appendix
+      align would be miscounted; \notag/\label per-row parsing is fragile). Instead:
+      measure block natural width via `\sbox{aligned}`; if `>\linewidth`, render the
+      GENUINE align inside `\begin{minipage}{natw+30pt}` then `\resizebox{\linewidth}`
+      the whole minipage. Content+numbers scale uniformly => cross-row `=` alignment,
+      per-row (n), `\notag`, `\label`, count ALL preserved (standalone-verified: a
+      `\nonumber`-first-row block keeps exactly 1 number). Fitting blocks stay native.
+      pages-past-PAPER-edge 13->1 (the authoritative metric: text/draw maxx>W+2), overfull
+      >30pt 15->1, body 9.96pt, 224pp. Rendered: VAE eq(136/137), Prop1 eq(41/42) in-box,
+      L_FM proof (i)-(iv) all fit w/ full-size numbers + alignment; Taylor align* unchanged.
+- [ ] **Lever 2c (align half, part 3) — the LONE numbered `alignat{2}`** (part_04
+      Thm17 SDE-extension, eq 44/45, p68; only remaining page past the paper edge,
+      73.1pt over). It is inside an mdframed theorem box and uses `&&` 2-column layout
+      (X_0|dX_t side-by-side) + a `\notag` middle row. The align minipage+resizebox
+      trick should extend to it: clone genuine alignat, wrap `\begin{rlgenalign... }`-style
+      but alignat needs its `{2}` arg + its own \start@aligned. Try: measure
+      `aligned`-of-the-body then minipage+resizebox a `\begin{rlgenalignat}{2}\BODY\end`.
+      Watch the \endalignat repoint (already aliased to genuine end) — must not re-clobber.
 - [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
       Only for genuinely un-shrinkable wide equations/tables; read sideways.
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:

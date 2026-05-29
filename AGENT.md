@@ -548,3 +548,42 @@ architecture.
   129/113/107/100/96/92pt. Next: Lever 2c part-2 (split-and-tag per row, OR landscape).
 - COUNTER: code-change iter; two-clean STOP counter N/A until multi-row align done +
   fresh double-check. Deliverable NOT regenerated yet (overflow not ~0).
+
+## iter 2026-05-29 (Lever 2c part-2 — multi-row numbered align — past-edge 13->1)
+- RE-MEASURED the real defect with the AUTHORITATIVE metric (text+draw span maxx >
+  pagewidth+2, NOT the overfull-vs-\linewidth log count): only 13 pages had content
+  PAST THE PAPER EDGE (worst p195=95.8, p69=73.1, p59=40.7, p66=37.1pt). The ~15
+  overfull-\hbox>30pt in the log are mostly margin-spill (into the 7.2pt geometry
+  margin, still ON the page) — \linewidth ~243pt < pagewidth 257.3pt, so a box can be
+  "overfull" by <14pt yet not run off the paper. Trust the page-edge metric.
+- The 4 bad pages were all MULTI-ROW numbered `align` derivation chains (cross-row =
+  alignment, 2 numbers each) + 1 numbered `alignat` (Thm17). Multi-row align was
+  routed through the native `rlgenalign` clone = unscaled = overflowed.
+- REJECTED the fix_plan's split-and-tag option: an appendix align begins
+  `\begin{align}\nonumber` (1st row unnumbered, 2nd \label'd) — per-row routing through
+  `equation` would NUMBER that row => count+1 (BANNED). \notag/\label per-row token
+  parsing is fragile.
+- FIX (notes.sty, multi-row branch): measure `\sbox\rlnumbox{...\begin{aligned}\BODY
+  \end{aligned}}`; if `\wd+30pt > \linewidth`, emit the GENUINE align inside
+  `\begin{minipage}{\rlnatw}` (natw = content+30pt reserve, so it lays out un-wrapped at
+  full width with the (n) at the right) and `\resizebox{\linewidth}{!}{<minipage>}` the
+  whole thing. One uniform graphic scale => content + numbers shrink together, so
+  cross-row = alignment, per-row (n), \notag, \label, and the global equation COUNT are
+  ALL preserved. Fitting blocks (natw<=linewidth) stay native/full-size, untouched.
+- STANDALONE-VERIFIED FIRST (/tmp/rlmini.tex): a wide 2-row block -> (1)(2); a wide
+  \nonumber-first-row block -> exactly ONE number (3) [count correct!]; a fitting block
+  -> native (4)(5). 5 eqs total = native count. minipage+resizebox works inside mdframed
+  too (\linewidth = box inner width).
+- REAL BUILD: exit 0, 224pp (was 228; minor reflow), body font median 9.96pt UNCHANGED.
+  pages-past-paper-edge 13->1, overfull>30pt 15->1 (the 1 = the lone alignat, 80.6pt vs
+  linewidth / 73.1pt past edge). Rendered+Read: p191 VAE eq(136/137) underbraces+colors+
+  full-size (136)(137) fit; p65 Prop1 eq(41/42) inside blue box now fits incl. the b_t
+  term that ran off, full-size tags; p55 L_FM proof 4-row (i)-(iv)+underbraces+QED fits
+  w/ cross-row = alignment; p182 Taylor align* unchanged (NO regression on fitting/
+  unnumbered blocks). No new defect.
+- REMAINING = the LONE numbered `alignat{2}` (part_04 Thm17, eq44/45, p68) — only page
+  still past the paper edge. Uses && 2-col + \notag middle row, inside a theorem box.
+  Next: extend the minipage+resizebox trick to a cloned alignat (needs its {2} arg), OR
+  landscape it. Then re-verify (2 fresh page-sets) + regenerate the deliverable.
+- COUNTER: code-change iter; two-clean STOP counter N/A until alignat done + fresh
+  double-check. Deliverable NOT regenerated yet (1 page still overflows).
