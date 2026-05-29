@@ -139,3 +139,23 @@ Next: Lever 3 (per-region width-fit so a rare wide element doesn't shrink a whol
 page) — but note Lever 2 already union-fits per region, so for single-column MIT
 (one region/page) Lever 3's remaining gain is limited to pages where a wide eq
 forces smaller body; quantify before implementing.
+
+FIXED (2026-05-29 Lever 3 quantified — NOT ACTIONABLE — + re-verify STOP): No
+code change. Lever 3 ("don't let a rare wide element force the whole page smaller
+than the body needs") quantified by a per-region probe over all 84 src pages
+(landscape avail_w=343.5): current per-page body font is already near-uniform
+(median 6.91, p10=p90=6.91) because MIT body prose IS a genuine full-column single
+column reaching ~496.8pt on ~94% of pages — the body is itself the widest element.
+Splitting off the single widest block per page → median 6.91→6.91 (ZERO gain,
+< the 0.1pt stop threshold); only 5/84 pages change, and those are false positives
+(p75's widest block is real full-width prose; p57's is a Figure-18 band spanning
+the column). Implementing it would shrink genuine prose and break cross-page body
+uniformity → not done. Regenerated deliverable from HEAD (Levers 1+2): 146 pp,
+median 6.89pt, 0 blank, cov med 100.4%/min 54.48%. Two independent double-check
+render passes Read in full — A {0,18,45,72,100,128,145}, B {9,33,60,88,118,140} —
+BOTH fully clean. FINAL achieved body font = 6.89pt (6.54→6.70→6.89 across the
+three levers). 8pt is geometrically impossible on the 6" device without reflow:
+body lines ~497pt vs 6" landscape long edge 347.5pt → max whole-line scale
+~343.5/497 ≈ 0.69 → ~6.9pt; 8pt would need ~398pt of screen width the device does
+not have (reflow / line-cutting BANNED, wider device declined). All three font
+levers exhausted at the true geometric ceiling => STOP, loop objective complete.

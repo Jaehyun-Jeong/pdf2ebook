@@ -277,3 +277,41 @@ have not rendered and viewed this iteration.
   push PAGE_MARGIN 2→1pt for ~+0.06pt (bezel safety tradeoff).
 - COUNTER: code-change iter; two-clean STOP counter stays N/A until Lever 3 is
   resolved and a fresh from-scratch double-check runs.
+
+## iter 2026-05-29 (Lever 3 quantified — NOT ACTIONABLE — + re-verify → STOP)
+- NO code change. Lever 3 = "don't let a rare wide element force the whole page
+  smaller than the body needs." Probe replicated run_split per region over all 84
+  src pages (landscape avail_w=343.5, PAGE_MARGIN=2):
+    * current per-page body font (10pt src × avail_w/union_width) is already
+      near-UNIFORM: median 6.91, p10=p90=6.91, min 6.75, max 7.80.
+    * Reason: the MIT body prose IS a genuine full-column single column reaching
+      ~496.8pt on ~94% of pages → the body is itself the widest element, so there
+      is no rare-wide-element-vs-narrow-body gap to exploit on the vast majority
+      of pages.
+    * Dropping the single widest block per page from the width → median stays
+      6.91 → 6.91 (ZERO gain, < the 0.1pt stop threshold). Only 5/84 pages changed.
+    * Those 5 are mostly FALSE POSITIVES: src p75's widest 496.8 block is a real
+      full-width PROSE line ("This shows the third property…") — Lever 3 would
+      wrongly shrink genuine body text; src p57's widest is the Figure-18 band that
+      legitimately spans the column (body there = naturally-narrow Algorithm-7
+      lines). Enlarging only those pages would also break cross-page body-size
+      uniformity ("exact same design").
+  => Lever 3 yields no median gain AND would break design uniformity / shrink real
+     prose → NOT IMPLEMENTED (resolved, per PROMPT's "stop when a lever yields
+     <0.1pt or would break design").
+- RE-VERIFY (this iter): regenerated deliverable from HEAD (Levers 1+2) — 146 pp,
+  median 6.89pt, 0 blank, cov med 100.4% / min 54.48%. Read TWO independent
+  page-sets in full: A {0,18,45,72,100,128,145}, B {9,33,60,88,118,140}. BOTH
+  fully CLEAN — eqs (6/7a/7b, 24/25/26, 43, 88, 111/112) on own rows with attached
+  numbers/word-tags; callouts (Theorem 5, Remark 16, Summary 45, Intuition 44,
+  Algorithm 6/7) flow at body size; figures whole (prob-path triptych, dog grid,
+  DiT); refs/appendix-E/TOC clean; page-boundary headings not cut; correct order;
+  no blanks/clips/detached labels. papers/ereader/ regenerated.
+- FINAL: all three font levers exhausted (1: margin 6→2pt; 2: width-fit to true
+  text bbox; 3: no-op for full-width single column). Achieved body font 6.89pt
+  (6.54→6.70→6.89). 8pt is GEOMETRICALLY IMPOSSIBLE on 6": body lines ~497pt, 6"
+  landscape long edge 347.5pt → max whole-line scale ~343.5/497 ≈ 0.691 → ~6.9pt;
+  8pt needs scale 0.80 → ~398pt of screen width the 6" device does not have. The
+  only routes to 8pt are reflow or line-cutting (both BANNED) or a wider device
+  (user declined). => two consecutive clean double-checks + clean metric + all
+  levers exhausted at the true geometric ceiling => STOP. Loop objective complete.

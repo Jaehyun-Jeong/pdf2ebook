@@ -26,14 +26,27 @@ document the achieved font and why 8pt is unreachable on 6".
       141 → 146, 0 blank, cov med 98.5 → 100.4% (min 54.48%), nothing clipped
       (rendered p40/p73/p90/p125/p128/p129 — eqs/figs/callouts/page-breaks all
       clean). See FIXES.md.
-- [ ] **Lever 3 — per-region width-fit so a rare wide element (full-width display
-      eq / wide figure / header band) does NOT force the whole page to a smaller
-      scale than body prose needs.** Body regions fit to screen on their own where
-      reading order allows; oversized wide elements scaled whole (never clipped,
-      never line-cut). Expect body prose → toward ~7pt.
-- [ ] **Re-verify + document.** After levers exhausted: regenerate the deliverable,
-      run the metric + two double-check render passes, record achieved font in
-      FIXES.md and (if <8pt) the exact geometric reason 8pt is impossible on 6".
+- [x] **Lever 3 — per-region width-fit — QUANTIFIED, NOT ACTIONABLE for MIT.**
+      Probe (replicating run_split per region over all 84 src pages, landscape
+      avail_w=343.5): current per-page body font is already near-uniform (median
+      6.91, p10=p90=6.91) because the MIT body prose IS a genuine full-column
+      single column reaching ~496.8pt on ~94% of pages — the body is itself the
+      widest element, so no rare wide element is forcing it smaller. Splitting off
+      the single widest block per page moves the median 6.91 → 6.91 (ZERO gain,
+      below the 0.1pt stop threshold). Only 5/84 pages even changed, and on
+      inspection those are false positives: p75's widest 496.8 block is a genuine
+      full-width prose line (Lever 3 would WRONGLY shrink it); p57's widest is a
+      Figure-18 band that legitimately spans the column. Implementing Lever 3 would
+      shrink real prose and break cross-page body-size uniformity for no median
+      gain → not done. See AGENT.md probe.
+- [x] **Re-verify + document — DONE, STOP.** Regenerated the deliverable from
+      current HEAD (Levers 1+2): 146 pages, median 6.89pt, 0 blank, cov med 100.4%
+      / min 54.48%. Two independent double-check render passes Read in full —
+      A {0,18,45,72,100,128,145}, B {9,33,60,88,118,140} — BOTH fully clean
+      (equations on own rows w/ attached numbers & word-tags, callout boxes flow at
+      body size, figures whole, references/appendix/TOC clean, page-boundary
+      headings not cut, correct order, no blanks). Achieved body font 6.89pt; 8pt
+      is geometrically impossible on 6" without reflow — see FIXES.md / AGENT.md.
 
 ## STOP re-asserted 2026-05-29 — fresh from-scratch double-check CLEAN
 
