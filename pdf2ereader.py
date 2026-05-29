@@ -251,6 +251,109 @@ def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
     return slices
 
 
+def region_blocks(page: "fitz.Page", region: "fitz.Rect"
+                  ) -> list[tuple["fitz.Rect", str]]:
+    """Tagged, figure-clustered content blocks inside `region`, sorted top->bottom.
+    Text lines stay SEPARATE (so they flow across pages); figure atoms (images +
+    vector drawings) that are near each other MERGE into one composite block (so
+    a figure is never split). Returns list of (rect, kind) where kind is
+    'text' or 'fig'."""
+    texts: list[fitz.Rect] = []
+    figs: list[fitz.Rect] = []
+
+    info = page.get_text("dict")
+    for block in info.get("blocks", []):
+        if block.get("type", 0) == 0:
+            for line in block.get("lines", []):
+                r = fitz.Rect(line["bbox"]) & region
+                if r.width > 1 and r.height > 1:
+                    texts.append(r)
+        else:
+            r = fitz.Rect(block["bbox"]) & region
+            if r.width > 1 and r.height > 1:
+                figs.append(r)
+
+    for path in page.get_drawings():
+        if path.get("rect"):
+            r = fitz.Rect(path["rect"]) & region
+            if r.width > 1 and r.height > 1:
+                figs.append(r)
+    try:
+        for item in page.get_image_rects(full=True):
+            rr = item[0] if isinstance(item, (tuple, list)) else item
+            r = fitz.Rect(rr) & region
+            if r.width > 1 and r.height > 1:
+                figs.append(r)
+    except Exception:
+        pass
+
+    # Merge nearby figure atoms into composite figure blocks.
+    gap = 10.0
+    changed = True
+    while changed and figs:
+        changed = False
+        out: list[fitz.Rect] = []
+        used = [False] * len(figs)
+        for a in range(len(figs)):
+            if used[a]:
+                continue
+            cur = fitz.Rect(figs[a])
+            used[a] = True
+            for b in range(a + 1, len(figs)):
+                if used[b]:
+                    continue
+                infl = fitz.Rect(cur.x0 - gap, cur.y0 - gap, cur.x1 + gap, cur.y1 + gap)
+                if infl.intersects(figs[b]):
+                    cur |= figs[b]
+                    used[b] = True
+                    changed = True
+            out.append(cur)
+        figs = out
+
+    blocks = [(r, "text") for r in texts] + [(r, "fig") for r in figs]
+    blocks.sort(key=lambda it: (round(it[0].y0, 1), round(it[0].x0, 1)))
+    return blocks
+
+
+def emit_stacked(out: "fitz.Document", src: "fitz.Document", pno: int,
+                 region: "fitz.Rect", blocks: list[tuple["fitz.Rect", str]],
+                 dev: Device) -> None:
+    """Flow `blocks` top-to-bottom onto device pages with whitespace COLLAPSED:
+    scale to fill the width, place each block at a running y with a small capped
+    gap, start a new page when the next block won't fit. No near-empty pages, no
+    big blank bands, nothing cut. A block taller than a page gets its own page,
+    scaled down whole. Horizontal offset within the region is preserved (centred
+    titles stay centred, columns stay aligned)."""
+    if not blocks:
+        return
+    scale = (dev.width_pt - 2 * PAGE_MARGIN) / region.width
+    avail_h = dev.height_pt - 2 * PAGE_MARGIN
+    max_gap = 6.0  # device pt: caps large source gaps, keeps paragraphs tidy
+    page = None
+    y = PAGE_MARGIN
+    prev_y1 = None
+    for rect, _kind in blocks:
+        bw, bh = rect.width * scale, rect.height * scale
+        if bh > avail_h:  # oversized figure: own page, whole
+            fit = min((dev.width_pt - 2 * PAGE_MARGIN) / rect.width, avail_h / rect.height)
+            w, h = rect.width * fit, rect.height * fit
+            p = out.new_page(width=dev.width_pt, height=dev.height_pt)
+            x = (dev.width_pt - w) / 2
+            p.show_pdf_page(fitz.Rect(x, PAGE_MARGIN, x + w, PAGE_MARGIN + h),
+                            src, pno, clip=rect)
+            page, y, prev_y1 = None, PAGE_MARGIN, rect.y1
+            continue
+        gap = 0.0 if prev_y1 is None else min(max(0.0, rect.y0 - prev_y1) * scale, max_gap)
+        if page is None or y + gap + bh > PAGE_MARGIN + avail_h:
+            page = out.new_page(width=dev.width_pt, height=dev.height_pt)
+            y, gap = PAGE_MARGIN, 0.0
+        y += gap
+        x = PAGE_MARGIN + (rect.x0 - region.x0) * scale
+        page.show_pdf_page(fitz.Rect(x, y, x + bw, y + bh), src, pno, clip=rect)
+        y += bh
+        prev_y1 = rect.y1
+
+
 def _merge_y_bands(rects: list["fitz.Rect"], crop: "fitz.Rect") -> list["fitz.Rect"]:
     """Merge rects with overlapping/adjacent y-intervals into full-width bands."""
     if not rects:
@@ -427,12 +530,10 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
         regions = two_col_regions(page, crop) if two_col else [crop]
 
         for region in regions:
-            atoms = region_atoms(page, region)
-            if not atoms:
+            blocks = region_blocks(page, region)
+            if not blocks:
                 continue
-            screen_h = screen_height_src(region.width, dev)
-            for sl in pack_slices(region, atoms, screen_h):
-                emit_region(out, src, i, sl, dev)
+            emit_stacked(out, src, i, region, blocks, dev)
     return out
 
 
