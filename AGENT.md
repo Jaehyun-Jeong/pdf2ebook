@@ -447,3 +447,28 @@ architecture.
 - REMAINING OVERFLOW = numbered align (100) + equation (35) only — Lever 2c, hardest
   (can't use \aligned, loses the (n) tag; worst boxes ~189pt). Then Lever 3 landscape.
 - COUNTER: code-change iter; two-clean STOP counter N/A until 2c done + fresh double-check.
+
+## iter 2026-05-29 (Lever 2c equation-half — auto-fit numbered equation — overfull 66->55)
+- Numbered display envs (equation/align) CANNOT be boxed (display envs error in
+  restricted-horizontal/sbox), so the 2a/2b "\aligned in \resizebox via \centerline"
+  trick drops the (n) tag. KEY INSIGHT for `equation`: don't box the env — \let-save
+  the genuine \equation/\endequation BEFORE \RenewEnviron (avoids environ name
+  recursion), then re-enter it with the body as an auto-fitted hbox:
+  \RenewEnviron{equation}{\rloldequation\rlfitnum{$\small\displaystyle\BODY$}\rloldendequation}.
+  \rlfitnum \resizebox-es to (\linewidth-26pt) ONLY when wider (26pt reserves the
+  "(nnn)" tag); the equation env appends (n) at FULL size in the right margin.
+- VERIFIED: build exit 0, 229pp, body 9.96pt unchanged. overfull 66->55 (>30pt
+  43->34), pages-past-right-edge(block) 19->16. The 176pt VAE equation (eq83,
+  total_vae_loss, out-p122) — 2nd-worst overall — now fits w/ full-size (83).
+  Rendered out-p122 (3-line aligned VAE loss + 4 underbraces, fits, vector,
+  number full-size), out-p100 (wide eq68 TimeEmb scaled+fits, narrow eq69 left
+  untouched = conditional resize works), out-p110 (figure/body prose ~10pt clean).
+  No regression on fitting equations.
+- equation* (5 envs) still native (deliberately, per 2a notes). 
+- REMAINING OVERFLOW = numbered `align` (100 envs) — now THE bulk AND all worst
+  boxes (189/173/163/161/149pt). HARD: align can't be boxed and per-row scaling
+  breaks &-alignment + the (n) count (\cref). Next: Lever 2c align-half — split
+  BODY on \\, scale each row in an aligned-of-one with an explicit \tag mirroring
+  amsmath numbering (MUST preserve equation count), OR landscape the worst few.
+- COUNTER: code-change iter; two-clean STOP counter N/A until align-half done +
+  fresh double-check. Deliverable NOT regenerated yet (overflow not ~0).

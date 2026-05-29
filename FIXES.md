@@ -184,3 +184,14 @@ stay correct selectable vector.
 font median 9.96pt UNCHANGED. Verified render out-p23 (Heun's method): both rows
 aligned at =, both ► margin annotations fit the column, vector+selectable, correct.
 Remaining overflow = numbered align/equation (Lever 2c) — the hardest, worst boxes.
+
+## Lever 2c (equation half) — auto-fit numbered `equation`
+\let-saved the genuine equation env then \RenewEnviron re-enters it with the body
+as an auto-fitted hbox (\rlfitnum: \resizebox to \linewidth-26pt only when wider),
+so amsmath still emits the (n) tag at full size in the right margin (display envs
+can't be boxed, so the 2a/2b trick can't keep the number). Build exit 0, 229pp.
+Overfull \hbox 66->55 (>30pt 43->34), the 176pt VAE equation (eq83) fixed,
+pages-past-right-edge 19->16, body font median 9.96pt UNCHANGED. Verified render:
+out-p122 eq(83) 3-line VAE loss fits w/ full-size number; out-p100 wide eq(68)
+TimeEmb scaled+fits while narrow eq(69) untouched; out-p110 figure/body clean.
+Remaining overflow = numbered align (100 envs, all worst boxes) — Lever 2c align-half.

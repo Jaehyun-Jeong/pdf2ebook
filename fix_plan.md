@@ -42,12 +42,26 @@ off), p124, p191, p192, p199, p218.
       Verified render: out-p23 Heun's-method block — both rows aligned at `=`, the
       two `►` `&&\text{...}` margin annotations ("initial guess…", "update with
       average…") fit the column, vector+correct, sane `&&` spacing.
-- [ ] **Lever 2c — auto-fit NUMBERED `align`/`equation`** (100 + 35 envs; worst
-      overflow, e.g. p138 eq85/86, p94 eq63/64, worst 210pt). Can't use `\aligned`
-      (loses the (n) tag). Options: (i) keep `\begin{align}` but scale rows that
-      are too wide individually; (ii) capture each numbered row, scale body in a
-      box, re-attach the tag with `\tag` + reserved space; (iii) `breqn`. Hardest;
-      test on a few. Keep tag visible and correct.
+- [x] **Lever 2c (equation half) — auto-fit NUMBERED `equation`** (35 envs). DONE
+      (this iter): `\let`-saved the genuine `equation` env, then `\RenewEnviron`
+      re-enters it placing `\rlfitnum{$\small\displaystyle\BODY$}` as the math —
+      `\rlfitnum` `\resizebox`es the body to `\linewidth-26pt` ONLY when wider, so
+      the env still emits the `(n)` tag at FULL size in the right margin (no boxing
+      of the display env; fitting eqs untouched). overfull 66->55 (>30pt 43->34),
+      176pt VAE `equation` (p122 eq83) fixed, pages-past-edge 19->16, body 9.96pt
+      unchanged, 229pp. Verified render: p122 eq(83) 3-line aligned body fits w/
+      full-size (83); p100 wide eq(68) TimeEmb scaled+fits while narrow eq(69)
+      untouched; p110 figure/body clean. No regression.
+- [ ] **Lever 2c (align half) — auto-fit NUMBERED `align`** (100 envs; THE bulk +
+      all worst boxes now: 189/173/163/161/149pt are align — part_04:27/344,
+      part_03:107, part_07:266, fokker_planck:81). HARD: align is a display env
+      with `&`/`\\` tabs so it can't be boxed (the equation trick above won't
+      work), and per-row independent scaling breaks `=` alignment + drops the (n)
+      tags / shifts the equation count (breaks \cref). Options: (i) split BODY on
+      `\\`, scale each row's math in an `\aligned`-of-one but re-attach an explicit
+      `\tag`/`\notag` per row mirroring amsmath's numbering (must preserve count!);
+      (ii) `breqn` `dgroup` (risks custom macros); (iii) landscape (Lever 3) the
+      handful that truly can't shrink. Test on part_04:27 first. Keep (n) correct.
 - [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
       Only for genuinely un-shrinkable wide equations/tables; read sideways.
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
