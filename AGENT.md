@@ -139,6 +139,33 @@ have not rendered and viewed this iteration.
   IS the design-preserving ceiling; the old "split MIT to 9-10pt" goal is
   geometrically impossible without reflow (banned). Treat font axis as DONE.
 
+## iter 2026-05-29 (detached equation numbers — fix_plan #5 DONE)
+- Double-check pass 2 (page set 20/40/60/90/110/130) was NOT clean: out p130
+  showed eq numbers (115)-(118) stacked detached in the right-margin dead space
+  below their equation; #5 had predicted this for 125/126/127. So we did NOT stop.
+- ROOT CAUSE (instrumented region_blocks on src p73): display-eq labels "(n)" sit
+  at x0=531.7, a ~25pt alignment gap past the eq body's right edge (~506) — wider
+  than the text merge reach (infl_x=16) — so they never fused. Each flowed as a
+  lone atom AFTER the (often multi-row, tall-integral-chained) merged equation
+  block, so all the numbers stacked below the equation. WORSE: when the eq block's
+  OWN merged bbox already reached x=554 (the margin), the number showed through the
+  block's clip AND flowed separately => DUPLICATED numbers (seen p129/p130 first try).
+- FIX: region_blocks sets aside any lone "(n)"/"(n.m)" line (EQNUM_RE) whose x0 is
+  in the right 25% of the region, then re-attaches each to the block straddling the
+  number's vertical centre whose left edge is at/left of it (pick the WIDEST such
+  block), via bbox union — the number rides in that block's clip at its true 2D
+  position (NO reflow). TWO bugs found & fixed mid-iter: (a) sequential absorption
+  grew the block past later numbers -> compute all targets against the UNMUTATED
+  block list first; (b) the original `br.x1 <= num.x0` left-guard rejected tall eq
+  blocks already touching the margin (leaving the number to duplicate) -> guard is
+  now `num.x0 >= br.x0 - 2` (number not LEFT of the block), so a no-op union still
+  consumes the stray atom. Verified: out p124-127 eq 115-131 each on its own row,
+  0 detached/duplicated; TOC page numbers ("3"/"4", no parens) NOT misattached;
+  eq (70)/Remark 29/Figure 14/Summary 45 intact. Metric pages 149->142 (~7 stranded
+  number-lines collapsed back), font 6.54pt unchanged, blank 0, cov med 96.3%.
+- NEXT: #4 re-verify. Pass 2 was dirty this iter, so the two-consecutive-clean
+  counter resets; next loop must double-check from scratch before any STOP.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in

@@ -253,6 +253,9 @@ def pack_slices(region: "fitz.Rect", atoms: list["fitz.Rect"],
 
 
 _PAGENUM_RE = re.compile(r"(?:\d{1,4}|[ivxlcdm]{1,8})", re.IGNORECASE)
+# A lone equation label like "(118)" or "(3.2)" (allow a leading tag such as
+# "(2.14)"); matched against a right-margin line to re-attach it to its row.
+EQNUM_RE = re.compile(r"^\(\d+(?:\.\d+)?\)$")
 
 
 def _is_furniture(line_bbox, text: str, page_rect: "fitz.Rect") -> bool:
@@ -287,6 +290,7 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
     'text' or 'fig'."""
     texts: list[fitz.Rect] = []
     figs: list[fitz.Rect] = []
+    eqnums: list[fitz.Rect] = []  # right-margin equation labels, e.g. "(118)"
 
     info = page.get_text("dict")
     for block in info.get("blocks", []):
@@ -297,7 +301,16 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
                     continue  # drop running header / page-number footer
                 r = fitz.Rect(line["bbox"]) & region
                 if r.width > 1 and r.height > 1:
-                    texts.append(r)
+                    # A lone "(n)" parked in the right margin is an equation
+                    # number. A ~25pt alignment gap separates it from its
+                    # equation row (wider than the merge reach below), so it
+                    # would otherwise flow detached into the dead space under
+                    # the equation. Set it aside to re-attach to its band.
+                    if (EQNUM_RE.match(ltxt.strip())
+                            and r.x0 > region.x0 + 0.75 * region.width):
+                        eqnums.append(r)
+                    else:
+                        texts.append(r)
         else:
             r = fitz.Rect(block["bbox"]) & region
             if r.width > 1 and r.height > 1:
@@ -353,6 +366,34 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
             free_text.append(t)
 
     blocks = [(r, "text") for r in free_text] + [(r, "fig") for r in figs]
+    # Re-attach each right-margin equation number to the block on its
+    # horizontal band (the equation it labels), preferring the nearest block
+    # to its left. Merging extends that block's clip to include the number at
+    # its true position (no reflow) instead of letting it flow as a stranded
+    # line below the equation.
+    # Pick each number's target against the UNMUTATED blocks: several numbers
+    # may belong to one tall equation block, and absorbing the first would grow
+    # that block past the next number, wrongly failing the left-of guard.
+    targets: list[int | None] = []
+    for num in eqnums:
+        cy = (num.y0 + num.y1) / 2.0
+        best = None
+        for idx, (br, _kind) in enumerate(blocks):
+            # The equation on the number's band: a block straddling the
+            # number's vertical centre that starts at or left of it. (Don't
+            # require the block to end left of the number — a tall equation's
+            # merged bbox can already reach the margin; merging is then a
+            # no-op, but skipping it would leave the number to flow detached.)
+            if br.y0 - 2 <= cy <= br.y1 + 2 and num.x0 >= br.x0 - 2:
+                if best is None or br.x1 > blocks[best][0].x1:
+                    best = idx
+        targets.append(best)
+    for num, best in zip(eqnums, targets):
+        if best is not None:
+            br, kind = blocks[best]
+            blocks[best] = (br | num, kind)
+        else:
+            blocks.append((num, "text"))
     blocks.sort(key=lambda it: (round(it[0].y0, 1), round(it[0].x0, 1)))
     return blocks
 

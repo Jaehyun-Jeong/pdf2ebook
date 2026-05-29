@@ -46,3 +46,22 @@ by metric (blank pages 1->0, min coverage 0.4%->1.95%, font 6.54pt unchanged,
 148->149 pages) + render (p75/76 now dense body-size Remark 29 text in correct
 reading order with equations intact; Figure 14 on p73 fully preserved — guard
 spared the real figure).
+
+iter (b06eb56): FIXED MIT detached/duplicated equation numbers (fix_plan
+#5) — display-equation labels like (115)-(131) (src page 73) sit ~25pt past the
+equation body in the right margin, wider than the text-merge reach (infl_x=16),
+so they never fused into their equation block. They flowed as separate atoms AFTER
+the (often tall, multi-row) merged equation block — stacking detached in the dead
+space below the equation (output p128-130 before), and where the equation block's
+own bbox already reached the margin the number ALSO showed through its clip =>
+duplicated numbers. FIX: region_blocks now sets aside any lone "(n)"/"(n.m)" line
+in the right 25% margin (EQNUM_RE) and re-attaches each to the block straddling its
+vertical centre whose left edge is at/left of the number (widest such block), via a
+bbox union — placed intact in the block's clip at its true position (NO reflow).
+Targets are chosen against the UNMUTATED block list so several numbers on one tall
+equation all attach (an earlier number growing the block must not disqualify later
+ones). Verified by render (eq 115-131 across out p124-127 each on its own row, zero
+stacked/duplicated numbers; title/TOC page numbers "3"/"4" NOT misattached — regex
+needs parens; eq (70)/Remark 29/Figure 14/Summary 45 intact) + metric (pages
+149->142 as ~7 stranded number-lines collapse back, font 6.54pt unchanged, blank 0,
+coverage median 96.3% min 52.2%).

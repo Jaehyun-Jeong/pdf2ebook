@@ -13,10 +13,9 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 - [ ] **#4 Re-verify against acceptance** (next iteration's double-check):
       zero printing defects across body/eq/figure/TOC, font at ceiling. If a
       second consecutive double-check finds nothing new → STOP (done).
-- [ ] **#5 (low) Detached equation numbers, p140-ish.** Double-check flagged
-      (125)/(126)/(127) possibly stacked in a margin band away from their bodies
-      (LOW confidence — may be correct landscape layout for a stacked property
-      list). Inspect before touching; do NOT regress eq-integrity.
+      NOTE: this iteration's double-check (pass 2) was NOT clean — it found #5
+      (detached eq numbers), now fixed. So #4 has NOT yet had two consecutive
+      clean passes; next iteration must double-check again from scratch.
 
 ## Resolved / not-actionable
 
@@ -34,6 +33,15 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 ## Done
 
 (moved here as completed; see FIXES.md for the running fix log)
+- [x] #5 detached/duplicated equation numbers (pending-commit): right-margin "(n)"
+      labels (e.g. 115-131 on src p73) sat ~25pt beyond the eq body — wider than
+      the infl_x=16 merge reach — so they flowed stacked below their (tall, merged)
+      equation block, and where the block bbox already touched the margin they ALSO
+      duplicated. FIX: region_blocks sets aside EQNUM_RE lines in the right 25%
+      margin and re-attaches each (bbox union) to the widest block straddling its
+      y-centre, targets chosen against unmutated blocks. Verified: eq 115-131 each
+      on its own row, 0 stacked/duplicated, no TOC false-match; pages 149->142,
+      font 6.54pt unchanged, blank 0. See FIXES.md.
 - [x] empty pages eliminated, occluded text fixed, 2col tiny font fixed, landscape
       for wide single-column (prior iters 1-6; see git log).
 - [x] #1 display equations no longer scattered (84a16a9): anisotropic text merge
