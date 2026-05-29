@@ -72,6 +72,7 @@
 % only when wider than (\linewidth - number reserve), so equations that already
 % fit are untouched. Reserve ~26pt for the "(nnn)" tag at \small.
 \newsavebox\rlnumbox
+\newlength\rlnatw
 \newcommand\rlfitnum[1]{%
   \sbox\rlnumbox{#1}%
   \ifdim\wd\rlnumbox>\dimexpr\linewidth-26pt\relax
@@ -132,7 +133,26 @@
   \RenewEnviron{align}{%
     \rl@detectbreak
     \ifrl@multi
-      \begin{rlgenalign}\BODY\end{rlgenalign}%
+      % Lever 2c part-2: MULTI-row numbered align. Cannot box the env (loses the
+      % per-row (n) tags + &-alignment) and cannot per-row scale (breaks the
+      % cross-row = alignment AND the count/\notag). Instead measure the block's
+      % natural content width; if it would overflow the column, render the GENUINE
+      % align inside a minipage set to that natural width (+number reserve) so it
+      % lays out un-wrapped, then \resizebox the whole minipage uniformly down to
+      % \linewidth. Content AND numbers scale together => cross-row alignment,
+      % per-row numbers, \notag, \label, and the equation count are ALL preserved
+      % (verified: a \nonumber-first-row block keeps exactly one number). Blocks
+      % that already fit stay native (untouched, full size).
+      \sbox\rlnumbox{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}%
+      \setlength\rlnatw{\dimexpr\wd\rlnumbox+30pt\relax}%
+      \ifdim\rlnatw>\linewidth
+        \par\addvspace{\abovedisplayskip}\noindent
+        \resizebox{\linewidth}{!}{%
+          \begin{minipage}{\rlnatw}\begin{rlgenalign}\BODY\end{rlgenalign}\end{minipage}}%
+        \par\addvspace{\belowdisplayskip}%
+      \else
+        \begin{rlgenalign}\BODY\end{rlgenalign}%
+      \fi
     \else
       \rloldequation\rlfitnum{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}\rloldendequation
     \fi}%
