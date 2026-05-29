@@ -11,3 +11,10 @@ Format: `iter N (<commit>): FIXED <problem> — <how> — verified by <metric/re
   enlarge without reflow.
 
 (Loop iterations append their FIXED lines below.)
+
+iter (84a16a9): FIXED MIT display equations scattered vertically (eq 68/69 on
+src p41) — _merge_rects made anisotropic (infl_x=16, infl_y=1) so all atoms on
+one equation row fuse into a single block placed intact, while stacked prose
+lines stay separate — verified by render (eq 68/69 now one clean line each) +
+metric (pages 179->158, clipped 124->89, blank 0->1 trailing page-number page,
+font 6.5pt unchanged, no blowup).

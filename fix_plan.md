@@ -10,16 +10,6 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-- [ ] **#1 MIT equations split across page boundaries (PRINTING DEFECT).**
-      Rendered MIT p128→p129: equation (68) `TimeEmb(t) = [ ... ]^T` is fragmented
-      — its tall matrix bracket starts at the bottom of p128 and the rows continue
-      on p129. Root cause: an equation is many separate atoms (bracket pieces,
-      matrix rows that are 'text', the eq number) that `region_blocks` does NOT
-      cluster together, so `_Flow` breaks them at the page edge. Fix: cluster ALL
-      atoms (text + fig) belonging to one equation/figure into a single block
-      (e.g. merge atoms whose x-ranges overlap and are vertically adjacent, not
-      just fig-fig). A block taller than the page already gets its own page scaled
-      whole — so once clustered, the equation stays intact. Verify on MIT p128.
 - [ ] **#2 MIT font too small (6.5pt).** Landscape fit of MIT's wide single
       column only reaches 6.5pt. To enlarge WITHOUT reflow, split each wide
       single-column page into TOP/BOTTOM sub-pages (vertical halves), each fitting
@@ -39,6 +29,9 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 (moved here as completed; see FIXES.md for the running fix log)
 - [x] empty pages eliminated, occluded text fixed, 2col tiny font fixed, landscape
       for wide single-column (prior iters 1-6; see git log).
+- [x] #1 display equations no longer scattered (84a16a9): anisotropic text merge
+      (infl_x=16, infl_y=1) fuses each equation row into one intact block; verified
+      on MIT eq (68)/(69). pages 179->158, clipped 124->89, no blowup.
 
 ## Known pitfalls
 

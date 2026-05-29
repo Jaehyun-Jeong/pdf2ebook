@@ -71,6 +71,23 @@ have not rendered and viewed this iteration.
   p128->p129 (tall equation fragmented at page edge); (2) font only 6.5pt.
 - LeCun 8.1pt, MonoBite 9.7pt, all 0 blank / 0 clipped. fix_plan #1=eq integrity
   (cluster equation atoms), #2=top/bottom split MIT wide pages for bigger font.
+## iter 2026-05-29 (eq integrity — fix_plan #1 DONE, commit 84a16a9)
+- papers/ now holds ONLY MIT (LeCun/MonoBite gone). papers/ereader/ regenerated.
+- Root cause of "equation split": NOT a page-boundary cut. PyMuPDF's get_text
+  splits a display-equation ROW into many separate 'line' atoms (TimeEmb(t)=,
+  cos(...), ···, sin(...), tall brackets) on ONE horizontal band with ~10pt gaps.
+  region_blocks' `_merge_rects(texts, 1.0)` (1pt isotropic) never fused them, so
+  _Flow stacked each fragment vertically -> equation scattered down the page.
+- Fix: `_merge_rects` now (infl_x, infl_y); text uses (16, 1) — wide horizontal
+  reach fuses a whole equation row into ONE block (placed intact, internal 2D
+  layout preserved by the clip); tiny vertical keeps stacked PROSE lines separate
+  (they're already single full-width atoms) so they still flow -> NO page blowup.
+- Verified: eq (68)/(69) render as one clean line each; Algorithm-3 page clean;
+  pages 179->158, clipped 124->89, font 6.5pt (unchanged — font size is #2).
+  Only new "blank" page = trailing source page-number "84" on its own page (benign).
+- NEXT (fix_plan #1 is now #2): MIT font still 6.5pt. To enlarge w/o reflow, split
+  each wide single-col page into top/bottom sub-pages so each fills the screen.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in
