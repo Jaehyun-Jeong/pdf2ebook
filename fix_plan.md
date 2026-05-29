@@ -1,17 +1,35 @@
 # Fix Plan
 
-One item per line, top = next. Larger font + stable printing, design preserved
-(no reflow). Verify every change by metric + render. Commit only verified wins.
+One item per line, top = next. **MAXIMIZE MIT body font toward 8pt on the 6"
+device, exact same design (no reflow, no line cuts).** Verify every change by
+metric + render. Commit only verified wins.
 
-## Double-check findings (this restart)
+## Objective retarget 2026-05-29 (user: "enlarge to 8pt, complete same design")
 
-Current delivered fonts: MIT 6.5pt (too small), LeCun 8.1pt, MonoBite 9.7pt;
-all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
+User read the result and wants 8pt. User chose to STAY on the 6" device
+(declined a wider device). Measured geometry: body lines ~497pt, 6" landscape
+347.5pt → true ceiling ~7pt (8pt needs ~398pt width = impossible on 6" without
+reflow). DO NOT re-assert the old "6.6pt ceiling" STOP until the three font
+levers below are actually implemented + verified — the prior loop never minimized
+device margins or cropped to the true text bbox. Push to the real max, then
+document the achieved font and why 8pt is unreachable on 6".
 
 ## To do
 
-(empty — fresh two-pass double-check this iter found ZERO defects; STOP
-re-asserted. See STOP note below.)
+- [ ] **Lever 1 — minimize device PAGE_MARGIN (6pt → 2pt, try 0–1pt).** Content
+      is width-fit, so each margin pt shrinks font. Re-measure median font; verify
+      nothing clips the page edge. Expect ~6.5 → ~6.8–6.9pt.
+- [ ] **Lever 2 — crop to the TRUE text bbox, not the inflated ~508pt crop.**
+      Fit to the real ~497pt column. Verify no real glyph trimmed. Expect small
+      additional font gain.
+- [ ] **Lever 3 — per-region width-fit so a rare wide element (full-width display
+      eq / wide figure / header band) does NOT force the whole page to a smaller
+      scale than body prose needs.** Body regions fit to screen on their own where
+      reading order allows; oversized wide elements scaled whole (never clipped,
+      never line-cut). Expect body prose → toward ~7pt.
+- [ ] **Re-verify + document.** After levers exhausted: regenerate the deliverable,
+      run the metric + two double-check render passes, record achieved font in
+      FIXES.md and (if <8pt) the exact geometric reason 8pt is impossible on 6".
 
 ## STOP re-asserted 2026-05-29 — fresh from-scratch double-check CLEAN
 

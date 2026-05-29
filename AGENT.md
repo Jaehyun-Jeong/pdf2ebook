@@ -223,3 +223,21 @@ have not rendered and viewed this iteration.
   a fresh/stable loop iteration; always re-run metric and re-render to confirm;
   regenerate any temp file that looks corrupted. Did NOT attempt #1/#2 inline due
   to this — left for a clean loop iteration.
+
+## Retarget 2026-05-29 (objective: maximize font toward 8pt on 6", same design)
+
+- User reviewed the delivered PDF, says 6.54pt is too small, wants **8pt at the
+  EXACT same design** and explicitly chose to STAY on the 6" device (declined a
+  wider-device option that would make 8pt trivial).
+- HARD GEOMETRY (re-measured this retarget): src is US-Letter 612x792, body font
+  10pt, body/prose lines up to ~497pt wide, crop ~508pt. 6" landscape long edge =
+  347.5pt. 8pt needs scale 0.80 → ~398pt screen width → IMPOSSIBLE on 6" without
+  reflow (banned) or line-cutting (banned). True ceiling ~7pt.
+- BUT the prior STOP ("6.6pt ceiling") was declared WITHOUT exhausting the font
+  levers. New fix_plan To-do drives three real levers: (1) minimize PAGE_MARGIN
+  6pt→~2pt, (2) crop to true text bbox not the 508pt crop, (3) per-region
+  width-fit so a rare wide element doesn't shrink the whole page. Expect ~6.54 →
+  ~7pt. Do these BEFORE any STOP; then document achieved font + why 8pt is
+  unreachable on 6". Never claim 8pt unless metric+render show it.
+- Equation-integrity (#1), furniture-strip (#3), callout-box (#6), eq-num/word-tag
+  (#5) fixes are DONE — do not regress while chasing font.

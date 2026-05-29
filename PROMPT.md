@@ -1,74 +1,88 @@
-# Ralph Loop — Objective
+# Ralph Loop — Objective (retargeted 2026-05-29)
 
-Make the e-reader output font **larger** while keeping **stable, correct
-printing** (rendering/layout) — and preserve each paper's original design
-(no reflow). Find printing problems, fix ONE per iteration, verify visually +
-by metric, commit, and record what you fixed. Repeat until two consecutive
-checks find no problem.
+**Maximize the MIT e-reader body font toward 8pt on the 6" device, preserving
+the EXACT original design (no reflow, no line cuts).** The user wants 8pt and the
+same design. Squeeze every design-preserving geometric lever first; only stop
+once the font sits at its true measured maximum AND printing is defect-free.
 
-## The one rule
+## Honest constraint (do not ignore, do not hide)
 
-Each iteration: read state, pick the SINGLE top item in `fix_plan.md`, make one
-change to `pdf2ereader.py`, verify it, commit, update the plan. Then stop.
+MEASURED: MIT body is a genuine full-width single column — body/prose lines reach
+~497pt; the trimmed crop is ~508pt. The 6" landscape long edge is 347.5pt. So the
+absolute whole-line scale ceiling is `usable_width / line_width`. At the current
+6pt device margin: 335.5/497 ≈ 0.675 → ~6.75pt. With margins driven to ~0:
+347.5/497 ≈ 0.70 → ~7.0pt. **A true 8pt would need ~398pt of screen width — the
+6" device does not have it.** 8pt is therefore only reachable by reflow (banned)
+or a wider device (user chose to stay 6"). So:
 
-## What "larger font + stable printing" means
+- The target is 8pt; the REALISTIC ceiling on 6" is ~7pt. Push to that ceiling.
+- DO NOT stop at 6.54pt citing the old "6.6pt ceiling" until you have actually
+  implemented and verified the margin/crop levers below. The prior loop declared
+  the ceiling WITHOUT minimizing device margins or cropping to the true text bbox.
+- When you reach the true geometric max, STOP and DOCUMENT the achieved font and
+  the exact reason 8pt is unreachable on 6" (one short paragraph in FIXES.md).
+  Never claim 8pt if the render/metric does not show it.
 
-- Target on-device body font ~9-10pt where possible WITHOUT reflow (reflow is
-  banned — it destroys the design; see AGENT.md).
-- The known hard case is **MIT** (~6.5pt landscape): its text column is too wide
-  to enlarge by rotation alone. The agreed approach is to **split each wide
-  single-column page into top/bottom (or left/right) sub-pages** so each sub-page
-  fills the screen → roughly doubles the font, equations stay intact.
-- "Stable printing" = NO printing defects:
-  - no text line cut horizontally at a page/sub-page boundary,
-  - no equation/figure/table split across pages,
-  - no near-empty pages, no duplicated bands,
-  - no content clipped off the page edge, correct reading order.
+## The font levers to exhaust (each = one iteration, verify before commit)
+
+1. **Minimize device margin.** `PAGE_MARGIN` is currently 6pt; the content is
+   width-fit, so every margin point shrinks the font. Try 2pt (or 0–1pt) and
+   re-measure. Verify nothing touches/!clips the page edge.
+2. **Crop to the TRUE text bbox, not the inflated crop.** If `stable_crop_boxes`
+   leaves slack beyond the real text column (crop 508 vs text 497), fitting to the
+   true column raises scale. Verify no real glyph is trimmed.
+3. **Per-region width-fit (if not already).** Don't let a single rare wide element
+   (a full-width display equation, a wide figure, a header band) force the WHOLE
+   page to a smaller scale than the body prose needs. Fit narrow body regions to
+   the screen on their own where it doesn't break reading order. Verify wide
+   elements are NOT clipped (scale them whole if oversized).
+
+After each: re-measure median on-device body font and confirm it went UP with
+zero new defects. Stop when further levers yield <0.1pt or would break design.
+
+## What "stable printing" means (unchanged — no regressions)
+
+No text line cut at a page/sub-page boundary; no equation/figure/table split; no
+near-empty pages; no duplicated bands; no content clipped off the edge; correct
+reading order. The equation-integrity, furniture-strip, and callout-box fixes are
+DONE — do not regress them (see AGENT.md / fix_plan.md "Done").
 
 ## Environment
 
-- Python: `.venv/bin/python` (PyMuPDF installed).
-- Convert (design-preserving modes only — crop / fitw / 2col, never reflow):
-  `.venv/bin/python pdf2ereader.py "<in.pdf>" --mode fitw -o /tmp/out.pdf`
+- Python: `.venv/bin/python` (PyMuPDF). Input: `papers/MIT_flow_matching_diffusion.pdf`.
+- Convert (design-preserving only — crop / fitw / 2col, NEVER reflow):
+  `.venv/bin/python pdf2ereader.py "papers/MIT_flow_matching_diffusion.pdf" --mode fitw -o /tmp/out.pdf`
 - Render to inspect: `.venv/bin/python render_samples.py /tmp/out.pdf diag 150`
   then **Read** `diag/*.png`.
-- Metric (reliable even when image display drops): per output page compute
-  content-bbox coverage and median on-device font size; also scan for blank
-  pages (<15% coverage). Goal: font UP, blank pages ~0, coverage healthy.
-- Papers in `papers/`. Deliverables in `papers/ereader/`.
-- MonoBite is the reference (9.7pt, portrait) — keep it good; focus on MIT/LeCun.
+- Metric: per output page compute content-bbox coverage AND median on-device font
+  size (pt); scan for blank pages (<15% coverage). Goal: median body font UP toward
+  ~7pt, blank pages 0, coverage healthy, zero clipped pages.
+- Deliverable: regenerate `papers/ereader/MIT_flow_matching_diffusion.ereader.pdf`
+  from the improved tool on the iteration that lands the best font.
 
 ## Workflow each iteration
 
 1. Read `AGENT.md` and `fix_plan.md`.
-2. **Double-check pass (required at restart):** before changing anything, render
-   and inspect the CURRENT delivered outputs for printing problems TWICE
-   (two independent looks / two papers or two page-sets). List any problem found
-   in `fix_plan.md`. If two consecutive checks find nothing, STOP — done.
-3. Pick the top item. Make ONE change to `pdf2ereader.py`.
-4. `ast.parse` AND run a real conversion (a parse-OK file can still NameError).
-5. Verify: metric (font larger, no new blanks) + render and Read pages (a dense
-   body page, an equation page, a figure page). Confirm the specific defect is
-   gone and nothing new broke.
-6. Better → commit referencing the item, and write a one-line "FIXED: ..." note.
+2. Pick the top item in `fix_plan.md` "To do". Make ONE change to `pdf2ereader.py`.
+3. `ast.parse` AND run a real conversion (a parse-OK file can still NameError).
+4. Verify: metric (font UP, no new blanks/clips) + render and Read a dense body
+   page, an equation page, a figure page. Confirm font rose and nothing broke.
+5. Better → commit referencing the item + append a "FIXED: ..." line to FIXES.md.
    Worse/broken → `git checkout -- pdf2ereader.py`, note why in AGENT.md.
-7. Update `fix_plan.md` and `AGENT.md`.
-
-## Report what you fixed
-
-Each iteration that commits, append a line to `FIXES.md` (create if missing):
-`iter N (<commit>): FIXED <problem> — <how> — verified by <metric/render>.`
+6. Update `fix_plan.md` and `AGENT.md`. Regenerate the deliverable on the best iter.
 
 ## Acceptance / stopping
 
-Stop when: body font is as large as design-preservation allows (MIT split to
-~9-10pt), there are zero printing defects, AND two consecutive double-check
-passes find no new problem. Keep MonoBite intact.
+Stop when the median body font is at its true geometric maximum on the 6" device
+(all three levers exhausted; further change yields <0.1pt or would break design),
+printing defects are zero, AND two consecutive double-check passes find nothing
+new. Record the achieved font and — if it is below 8pt — the exact geometric
+reason 8pt is impossible on 6" without reflow.
 
 ## Guardrails
 
-- One change per iteration. Verify before commit. Never claim a result you did
-  not render/measure this iteration.
-- Reflow is banned (design must be preserved).
+- One change per iteration. Verify before commit. Never claim a font you did not
+  measure AND render this iteration.
+- Reflow is BANNED. Line-cutting (left/right split of a text column) is BANNED.
 - Never edit `loop.sh` or `PROMPT.md` from inside the loop.
 - If image display drops, gate commits on the metric and note "visual pending".
