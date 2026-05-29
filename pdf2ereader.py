@@ -306,8 +306,19 @@ def region_blocks(page: "fitz.Page", region: "fitz.Rect"
     for path in page.get_drawings():
         if path.get("rect"):
             r = fitz.Rect(path["rect"]) & region
-            if r.width > 1 and r.height > 1:
-                figs.append(r)
+            if r.width <= 1 or r.height <= 1:
+                continue
+            # Drop page-scale background fills behind text (shaded Remark /
+            # Definition callout boxes): a near-full-column rect enclosing many
+            # text lines is a background tint, not a figure. Kept, it absorbs the
+            # enclosed prose into one giant block that overflows a page (scaled
+            # down to tiny text) and strands the previous page near-empty. Drop
+            # the tint so the text flows at body size — line positions are
+            # unchanged (no reflow); only the background shade is lost.
+            if (r.width >= 0.9 * region.width and r.height >= 0.45 * region.height
+                    and sum(1 for t in texts if r.intersects(t)) >= 6):
+                continue
+            figs.append(r)
     try:
         for item in page.get_image_rects(full=True):
             rr = item[0] if isinstance(item, (tuple, list)) else item

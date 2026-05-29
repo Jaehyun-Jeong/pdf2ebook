@@ -109,6 +109,28 @@ have not rendered and viewed this iteration.
   lives in the clipped show_pdf_page XObject layer (not visible). Trust the
   RENDER, not get_text, when checking for visible duplicates/blanks.
 
+## iter 2026-05-29 (near-empty page — callout-box fill — fix #6 DONE)
+- Double-check via parallel vision inspectors (workflow) called all 32 sampled
+  pages CLEAN — but the METRIC caught output p75 at <1.5% ink (the one blank).
+  LESSON: vision agents rationalize whitespace as "section end"; trust the metric
+  for near-empty pages. p75 held only a lead-in line + 1 equation while p76
+  CONTINUED the same derivation = a real stranded-content defect, not a section end.
+- ROOT CAUSE (instrumented /tmp/diag_flow.py + diag_pages.py): this MIT textbook
+  renders Remark/Definition/Example callouts as a big vector FILL rect behind the
+  text (e.g. src p43 fill 98% crop-w x 72% crop-h). region_blocks added that fill
+  to `figs`; the text-absorb step folded all 57 enclosed prose lines into it ->
+  one 518.6pt block -> _Flow.add oversized branch placed it ALONE on its own page,
+  scaled to ~4.6pt (smaller than 6.5pt body!), and stranded the previous page.
+  6 such boxes doc-wide (src p17,21,32,43,48,62; ALL 0 images, 57-108 lines).
+- FIX: region_blocks drops a drawing rect with w>=0.9*region.w AND h>=0.45*region.h
+  AND >=6 enclosed text lines (background tint, not a figure). The enclosed prose
+  then flows at body size; the shade still shows through per-line show_pdf_page
+  clips so design is preserved (NO reflow — line positions unchanged). Verified:
+  blank 1->0, min cov 0.4%->1.95%, font 6.54pt unchanged, Figure 14 (p73) intact.
+- NOTE for next double-check: p54 (Example 23 short box, ~1.95% cov) is a SMALL
+  callout below the 0.45-height threshold — kept whole as a unit, legit section
+  end, NOT a defect (was low-cov before this fix too). Don't chase it.
+
 ## FONT CEILING (important — stops chasing an impossible target)
 - MIT body = genuine FULL-WIDTH single column: prose lines ~497pt, crop ~508pt.
   Landscape long edge 347.5pt → max whole-line scale 335.5/508 = 0.66 → 6.6pt.

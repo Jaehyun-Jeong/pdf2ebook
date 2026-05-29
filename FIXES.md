@@ -30,3 +30,19 @@ footnotes (non-numeric) are kept. Verified by double-check render (p031/p033/p03
 clean — heading once, no footers; title+TOC+Figure-7+last page intact; equations
 still whole) + metric (pages 158->148, blank 0, lone-number pages 3->0, font
 6.54pt unchanged — font is at its geometric ceiling, see AGENT.md).
+
+iter (cc3c348): FIXED MIT near-empty output page (p75 <1.5% ink: stranded
+1 lead-in line + 1 equation at ~85% white) — caused by src p43's shaded "Remark 29"
+callout box. Its vector background-fill rect (98% crop width x 72% height) was
+treated as a figure and absorbed all 57 enclosed prose lines into ONE 518.6pt
+block, which tripped _Flow's oversized-figure branch -> placed alone on the next
+page scaled down to ~4.6pt (SMALLER than 6.5pt body) and left the prior page
+near-empty. 6 such boxes doc-wide (src p17,21,32,43,48,62; all 0 images, 57-108
+lines). FIX: region_blocks now drops a drawing rect that spans >=0.9 crop width
+AND >=0.45 crop height AND encloses >=6 text lines (a background tint, not a
+figure) so the enclosed prose flows as normal body text — no reflow (line
+positions unchanged; the box shade still shows through per-line clips). Verified
+by metric (blank pages 1->0, min coverage 0.4%->1.95%, font 6.54pt unchanged,
+148->149 pages) + render (p75/76 now dense body-size Remark 29 text in correct
+reading order with equations intact; Figure 14 on p73 fully preserved — guard
+spared the real figure).

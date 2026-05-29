@@ -39,6 +39,14 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 - [x] #1 display equations no longer scattered (84a16a9): anisotropic text merge
       (infl_x=16, infl_y=1) fuses each equation row into one intact block; verified
       on MIT eq (68)/(69). pages 179->158, clipped 124->89, no blowup.
+- [x] #6 near-empty page from page-scale background-fill callout boxes: src p43's
+      shaded "Remark 29" box (vector fill 98% w × 72% h) absorbed all 57 enclosed
+      prose lines → one 518.6pt block → oversized branch placed it ALONE on p76
+      scaled to ~4.6pt and stranded p75 (<1.5% ink). FIX: region_blocks drops a
+      drawing rect spanning >=0.9 crop width AND >=0.45 height AND enclosing >=6
+      text lines (background tint, not a figure). 6 such boxes doc-wide all now
+      flow at body size. Verified: blank pages 1->0, min coverage 0.4%->1.95%,
+      font 6.54pt unchanged, Figure 14 intact, p75/76 dense + correct order.
 - [x] #3 running-header + page-number furniture removed (_is_furniture in
       region_blocks): killed duplicated heading bands (3.3/4.3 repeated below the
       page number) AND the blank trailing "84" page + lone page-number pages.
