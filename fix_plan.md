@@ -34,11 +34,14 @@ off), p124, p191, p192, p199, p218.
       pages-past-edge 40->22, body 9.96pt unchanged, p193 derivation now fits.
       NOTE: `equation*` (5 envs) excluded — environ mis-scans it across mdframed
       boxes; `\[...\]` maps to equation* here so the redef must use \centerline.
-- [ ] **Lever 2b — auto-fit `alignat*`** (7 envs). These hold the `\blacktriangleright`
-      `&&\text{...}` margin annotations (p24, p30) that overflow. Same treatment as
-      2a: `\RenewEnviron{alignat*}` (note it takes a `{n}` col-count arg — drop it,
-      `\aligned` handles `&`/`&&` itself) -> `\rldisplay{...\begin{aligned}\BODY\end{aligned}...}`.
-      Test the `&&` spacing renders sanely; verify p24/p30.
+- [x] **Lever 2b — auto-fit `alignat*`** (7 envs). DONE (this iter):
+      `\RenewEnviron{alignat*}[1]{...}` absorbs the `{n}` col-count arg (#1) and
+      reuses the 2a `\rldisplay{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}`
+      machinery; `\aligned` handles `&`/`&&`. overfull 71->66 (>30pt 48->43),
+      worst 210->189pt, pages-past-edge 22->19, body 9.96pt unchanged, 229pp.
+      Verified render: out-p23 Heun's-method block — both rows aligned at `=`, the
+      two `►` `&&\text{...}` margin annotations ("initial guess…", "update with
+      average…") fit the column, vector+correct, sane `&&` spacing.
 - [ ] **Lever 2c — auto-fit NUMBERED `align`/`equation`** (100 + 35 envs; worst
       overflow, e.g. p138 eq85/86, p94 eq63/64, worst 210pt). Can't use `\aligned`
       (loses the (n) tag). Options: (i) keep `\begin{align}` but scale rows that

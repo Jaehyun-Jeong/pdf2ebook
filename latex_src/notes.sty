@@ -66,6 +66,10 @@
 % Deferred: amsmath (which defines align*/equation*) loads later in this file.
 \AtBeginDocument{%
   \RenewEnviron{align*}{\rldisplay{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}}%
+  % Lever 2b: alignat* takes a mandatory {n} column-count arg; absorb it (#1) and
+  % let \aligned handle the &/&& alignment (incl. the \blacktriangleright &&\text
+  % margin annotations on p24/p30). Same auto-fit-to-\linewidth treatment as 2a.
+  \RenewEnviron{alignat*}[1]{\rldisplay{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}}%
 }
 \usepackage{fancyhdr}
 \pagestyle{fancy}

@@ -433,3 +433,17 @@ architecture.
     p94 eq63/64. Can't use \aligned (loses (n) tag). Lever 2c, hardest.
 - COUNTER: code-change iter; two-clean STOP counter N/A until 2b/2c done + fresh
   double-check. Deliverable NOT regenerated yet (overflow not ~0).
+
+## iter 2026-05-29 (Lever 2b — auto-fit alignat* — overfull 71->66)
+- \RenewEnviron{alignat*}[1]{\rldisplay{$\small\displaystyle\begin{aligned}\BODY
+  \end{aligned}$}} — the [1] absorbs alignat*'s mandatory {n} col-count arg (dropped),
+  \aligned handles &/&&. Reuses Lever 2a's \rlfit measured-sbox + \resizebox-to-
+  \linewidth (only scales rows wider than the column). 7 alignat* envs covered.
+- VERIFIED: build exit 0, 229pp (unchanged), body 9.96pt unchanged. Overfull \hbox
+  71->66 (>30pt 48->43), worst 210->189pt, pages-past-right-edge(block) 22->19.
+  Rendered out-p23 (Heun's method alignat* w/ ► &&\text margin notes): both rows
+  aligned at =, both annotations ("initial guess…", "update with average…") fit the
+  column, sane && spacing, vector+selectable+correct. No regression.
+- REMAINING OVERFLOW = numbered align (100) + equation (35) only — Lever 2c, hardest
+  (can't use \aligned, loses the (n) tag; worst boxes ~189pt). Then Lever 3 landscape.
+- COUNTER: code-change iter; two-clean STOP counter N/A until 2c done + fresh double-check.

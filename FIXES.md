@@ -175,3 +175,12 @@ eqs with trailing ▶ margin-annotations still overflow). PARTIAL: ~77 boxes >60
 over remain — wide single-line equations + a custom ▶ margin-comment macro — left
 for Lever 2 (\resizebox / breqn / macro fix). Body never below 8pt; equations
 stay correct selectable vector.
+
+## Lever 2b — auto-fit unnumbered alignat* (this iter)
+\RenewEnviron{alignat*}[1]{...} absorbs the {n} col-count arg and reuses the 2a
+\rldisplay/\aligned auto-fit-to-\linewidth machinery (the 7 alignat* envs hold the
+\blacktriangleright &&\text{...} margin annotations). Build exit 0, 229pp. Overfull
+\hbox 71->66 (>30pt 48->43), worst 210->189pt, pages-past-right-edge 22->19, body
+font median 9.96pt UNCHANGED. Verified render out-p23 (Heun's method): both rows
+aligned at =, both ► margin annotations fit the column, vector+selectable, correct.
+Remaining overflow = numbered align/equation (Lever 2c) — the hardest, worst boxes.
