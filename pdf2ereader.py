@@ -593,6 +593,52 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
     return out
 
 
+def run_reflow(src: "fitz.Document", dev: Device, font_pt: float) -> "fitz.Document":
+    """Reflow (rewrap) the document to the device width via fitz.Story so body
+    text is a large, readable size regardless of the source column width — best
+    for prose papers. Source font sizes are scaled proportionally so headings stay
+    bigger than body. Figures embedded in the page flow inline. Equations and
+    complex layout may not survive — this is the trade-off for big upright text."""
+    import io
+    import re
+
+    med = median_font_size(src, _sample_indices(src.page_count)) or 11.0
+    sf = font_pt / med
+
+    def _scale(m: "re.Match") -> str:
+        return f"font-size:{float(m.group(1)) * sf:.1f}pt"
+
+    parts: list[str] = []
+    for page in src:
+        xhtml = page.get_text("xhtml")
+        m = re.search(r"<body[^>]*>(.*)</body>", xhtml, re.S)
+        body = m.group(1) if m else xhtml
+        parts.append(re.sub(r"font-size:\s*([0-9.]+)pt", _scale, body))
+
+    html = (
+        '<html><head><meta charset="utf-8"><style>'
+        'body{margin:0;line-height:1.35;}'
+        'p{margin:0 0 0.4em 0;}'
+        'img{max-width:100%;height:auto;}'
+        '</style></head><body>' + "\n".join(parts) + '</body></html>'
+    )
+
+    story = fitz.Story(html=html)
+    buf = io.BytesIO()
+    writer = fitz.DocumentWriter(buf)
+    mediabox = fitz.Rect(0, 0, dev.width_pt, dev.height_pt)
+    where = fitz.Rect(PAGE_MARGIN, PAGE_MARGIN,
+                      dev.width_pt - PAGE_MARGIN, dev.height_pt - PAGE_MARGIN)
+    more = 1
+    while more:
+        dev_page = writer.begin_page(mediabox)
+        more, _ = story.place(where)
+        story.draw(dev_page)
+        writer.end_page()
+    writer.close()
+    return fitz.open("pdf", buf.getvalue())
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -605,9 +651,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-o", "--output", help="output PDF (default: <input>.ereader.pdf)")
     p.add_argument("--device", default="kindle6", choices=sorted(DEVICES),
                    help="target device preset (default: kindle6)")
-    p.add_argument("--mode", default="auto", choices=("auto", "crop", "fitw", "2col"),
+    p.add_argument("--mode", default="auto", choices=("auto", "crop", "fitw", "2col", "reflow"),
                    help="auto=pick per document (default); crop=margins only; "
-                        "fitw=fit-to-width slice; 2col=split columns")
+                        "fitw=fit-to-width slice; 2col=split columns; "
+                        "reflow=rewrap text to screen (big upright font, prose only)")
+    p.add_argument("--reflow-font", type=float, default=11.0,
+                   help="reflow mode: target body font size in pt (default: 11)")
     p.add_argument("--min-font", type=float, default=8.5,
                    help="auto mode: target on-device body font in pt; below this "
                         "it slices to width instead of just cropping (default: 8.5)")
@@ -644,7 +693,13 @@ def main(argv: list[str] | None = None) -> int:
         mode, reason = choose_mode(src, crops, dev, args.min_font)
         print(f"[auto] chose '{mode}': {reason}")
 
-    if mode == "crop":
+    if mode == "reflow":
+        result = run_reflow(src, dev, args.reflow_font)
+        result.save(out_path, garbage=4, deflate=True)
+        pages_out = result.page_count
+        result.close()
+        print(f"[reflow] body ~{args.reflow_font:.0f}pt")
+    elif mode == "crop":
         result = run_crop(src, crops)
         result.save(out_path, garbage=4, deflate=True)
         pages_out = result.page_count
