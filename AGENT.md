@@ -347,6 +347,26 @@ have not rendered and viewed this iteration.
   landscape 347.5pt long edge → ceiling ~6.9pt); only reflow / line-cut (banned) or
   a wider device (user declined) could reach it.
 
+## iter 2026-05-29 (re-fire #4 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: input unchanged
+  (papers/ = MIT only, same bytes May 29 10:24); ast.parse OK; regenerated
+  /tmp/mit.pdf = 146 pp, font median 6.89pt (p10=6.83 p90=6.89) — IDENTICAL to the
+  recorded STOP metric (deterministic output, source unchanged). A naive
+  text-block coverage probe flagged out-page 55 as "low-text" (14%) — FALSE
+  POSITIVE: Read directly, p55 is the dense CSM-loss derivation + Algorithm-4
+  caption, full of content (the crude metric undercounts large display-equation
+  blocks; trust the render). Rendered + Read TWO fresh independent page-sets
+  distinct from all prior (14 pages): A {2,19,37,55,74,98,122,144}, B {30,50,67,
+  85,108,131}. BOTH fully CLEAN — eqs 8/9/28/50/70/80/98-100/125-131/147/148 on own
+  rows with attached numbers & word-tags; callouts (Example 6/13/34, Remark 20)
+  flow at body size; figures whole (Figure 13 MNIST grid, Figure 14 DiT/CLIP,
+  joint-PDF plot); Algorithm 3/4 line-items intact; footnote 6 kept; TOC clean;
+  correct order; no blanks/clips/detached labels. No NEW defect, input unchanged =>
+  STOP holds, no code change. Deliverable current (papers/ereader/ 146pp 6.89pt,
+  regenerated 11:59). 8pt remains geometrically impossible on 6" (body ~497pt vs
+  landscape 347.5pt long edge → ceiling ~6.9pt); only reflow / line-cut (banned)
+  or a wider device (user declined) could reach it.
+
 ## iter 2026-05-29 (re-fire #2 — protocol re-verify, STOP holds)
 - Loop re-fired again post-convergence. Re-fire protocol: input set unchanged
   (papers/ = MIT only, same bytes); ast.parse OK; regenerated /tmp/mit.pdf = 146 pp,
