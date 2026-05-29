@@ -1,0 +1,5 @@
+page width: 612pt, median content width (crop): 432pt
+median body font in source: 10.9pt
+PORTRAIT  width-fit scale 0.57 -> on-device font ~6.2pt
+LANDSCAPE width-fit scale 0.78 -> on-device font ~8.5pt
+target comfortable ~9-10pt
