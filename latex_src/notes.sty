@@ -38,6 +38,12 @@
 \usepackage[paperwidth=3.573in, paperheight=4.826in, includehead, includefoot,
   heightrounded, margin=0.10in, headsep=2pt, footskip=10pt]{geometry}
 \setlength{\emergencystretch}{3em}  % relieve overfull lines from the narrow column
+% --- Ralph loop Lever 1: shrink DISPLAY math only (not inline, not body prose) ---
+% A LaTeX pt is absolute; on the 257pt-wide page wide display equations overflow.
+% Rendering display math one size down (\small ~= 9pt) narrows multi-term lines so
+% they fit the column while body prose stays ~10pt. Appended (expandafter) so any
+% amsmath everydisplay tokens are preserved. Inline math is untouched.
+\AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\small}}
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhead[L]{\rightmark}

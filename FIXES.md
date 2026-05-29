@@ -159,3 +159,19 @@ body lines ~497pt vs 6" landscape long edge 347.5pt → max whole-line scale
 ~343.5/497 ≈ 0.69 → ~6.9pt; 8pt would need ~398pt of screen width the device does
 not have (reflow / line-cutting BANNED, wider device declined). All three font
 levers exhausted at the true geometric ceiling => STOP, loop objective complete.
+
+FIXED (2026-05-29 LaTeX pipeline, Lever 1 — shrink DISPLAY math only): added to
+notes.sty `\AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\small}}`
+so every display-math group (amsmath align/equation/gather + plain \[...\]) is
+set one size down (~9pt) while body prose and inline math stay 10pt. Rationale:
+a LaTeX pt is absolute, so on the 257.3x347.5pt 6" page wide multi-term display
+lines overflow the ~243pt text column; shrinking display math narrows them
+without touching readable body text. Build clean (exit 0), 233pp. Overfull \hbox
+128->118 (>30pt: 100->89), worst 246->210pt; ~40 pages still have a block past
+the right edge. Body font dominant span 9.96pt (>=8pt OK), display math 8.97pt.
+Verified by render+Read: p94 (CFG, body ~10pt, eq 63/65 fit, eq 64 still wide),
+p124 (VAE, body ~10pt, L_VAE eq still wide), p40 (prob-path, body justified ~10pt,
+eqs with trailing ▶ margin-annotations still overflow). PARTIAL: ~77 boxes >60pt
+over remain — wide single-line equations + a custom ▶ margin-comment macro — left
+for Lever 2 (\resizebox / breqn / macro fix). Body never below 8pt; equations
+stay correct selectable vector.

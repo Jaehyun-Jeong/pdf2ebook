@@ -21,15 +21,20 @@ off), p124, p191, p192, p199, p218.
 
 ## To do
 
-- [ ] **Lever 1 — shrink DISPLAY math only (not body prose).** Make display
-      equations render a notch smaller (e.g. `\everydisplay{\small}` or an
-      amsmath-safe equivalent) so multi-term lines fit ~257pt while body stays
-      ~10pt. Rebuild; re-measure overflow-page count (target big drop) and body
-      font (must stay >=8pt). Render p94 + p124 to confirm equations now fit and
-      are still correct. This is the cheapest, highest-leverage fix — try first.
-- [ ] **Lever 2 — scale the few still-oversized equations** with
+- [x] **Lever 1 — shrink DISPLAY math only (not body prose).** DONE: added
+      `\AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\small}}` in
+      notes.sty. Display math renders ~9pt; body prose stays 9.96pt. Overfull
+      \hbox 128->118 (>30pt 100->89), worst 246->210pt, pages-past-edge ~40, 233pp.
+      Verified render p94/p124/p40: body unchanged ~10pt, equations smaller but
+      correct. PARTIAL — wide single-line eqs + trailing `▶` margin-annotations
+      still overflow; that's Lever 2's job.
+- [ ] **Lever 2 — scale the still-oversized equations** with
       `adjustbox`/`\resizebox{\linewidth}{!}{...}` (or `breqn` auto-wrap) for any
-      equation still over the edge after Lever 1. Surgical; keep vector + correct.
+      equation still over the edge after Lever 1. ~77 boxes still >60pt over
+      (e.g. p94 eq 64 `□ = (z,y)∼...`, p124 `L_VAE`, p40 `▶` annotations). The
+      `▶` notes look like a custom margin-comment macro — find it (grep
+      math_commands.tex / *.tex for the ▶ / \sidenote / \rhd macro) and either
+      shrink/wrap it or pull it under the equation. Surgical; keep vector+correct.
 - [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
       Only for genuinely un-shrinkable wide equations/tables; read sideways.
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
