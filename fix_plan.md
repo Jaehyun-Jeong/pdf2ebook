@@ -1,43 +1,46 @@
 # Fix Plan
 
-One item per line, top = next. Verify every change by (a) the coverage metric
-and (b) rendering pages and LOOKING. Commit only what you verified.
+One item per line, top = next. Gate every change on the coverage metric
+(blank-page count must drop, text must not shrink) AND render + look when the
+image display is working. Commit only verified improvements.
 
 ## To do
 
-- [ ] **#1 Fill empty pages / empty space (atom-stacking emitter).** Replace
-      `pack_slices` + `emit_region` in the split path of `run_split` with a
-      stacking emitter that FLOWS content blocks onto device pages with collapsed
-      whitespace (see PROMPT.md "The fix" for the full algorithm). Tag atoms
-      text vs figure; MERGE only figure atoms into composite blocks (NOT text
-      lines — merging text lines caused a 112-page blow-up before); stack blocks
-      top-to-bottom, small capped gaps, new page when full, oversized block alone
-      scaled whole; preserve horizontal offset within the region. Acceptance:
-      zero pages under ~15% coverage, no big internal blank bands, text not
-      shrunk, figures whole, lines never cut. Verify on all three papers.
-- [ ] **#2 Tune spacing for readability.** Once stacking works, pick an
-      inter-block gap that looks natural (not cramped, not loose) — try a small
-      constant (~4-6pt device) plus a slightly larger gap when the source gap was
-      large (paragraph/section breaks). Render and eyeball.
-- [ ] **#3 Re-verify reading order** on a 2-col page with a mid-page figure:
-      left column, right column, spanning figure at its y-position.
+- [ ] **#1 Flow content CONTINUOUSLY across source pages (kills remaining
+      blanks).** Right now `run_split` calls `emit_stacked` per region per source
+      page, so each source page's leftover starts a fresh device page → ~1 partial
+      page per source page (that's the bulk of the remaining 35 blanks in LeCun).
+      Fix: collect blocks for the WHOLE document in reading order (per page:
+      full-width spans / left col / right col via the existing region logic),
+      then flow them through ONE continuous emit_stacked state so a new device
+      page starts only when full — not at every source-page boundary. Expected:
+      blank-page count → ~1 (only the very last page). Keep figures whole and
+      reading order correct. Verify with coverage metric (blank<15% near 0).
+- [ ] **#2 Check the MIT page growth (84→178).** With stacking, MIT text is now
+      width-filled (bigger/more readable) which is good, but confirm visually it
+      isn't *too* large / wasteful, and that #1 brings the page count back down by
+      removing per-page partial pages. Re-measure after #1.
+- [ ] **#3 Visual pass when image display works:** render a dense body page, a
+      former-blank page, a figure page, and a 2-col page with a mid-page figure
+      for each paper. Confirm: text readable, nothing cut, figures whole, reading
+      order L→R. (Algorithm guarantees no cut lines, but eyeball figures/order.)
+- [ ] **#4 Tune gap (currently 6pt cap).** If pages look cramped or loose after
+      #1, adjust `max_gap` in `emit_stacked` and the small intra-paragraph gap.
 
 ## Done
 
-- [x] **Occluded / cut sentences** — `region_atoms` + `pack_slices`: cut only
-      between atoms, never through a text line. (commit ba45f17 iter1)
-- [x] **Tiny font on 2-col pages** — `two_col_regions` band-segmentation: full-
-      width spans kept whole, column bands split L-then-R; body text fills a
-      column. (commit d122f9e iter2)
-- [x] **Top-align + margin** — `emit_region` top-aligns with 6pt margin.
-      (commit 3759cd9 iter3) — NOTE: this is what leaves blank space on sparse
-      pages; #1 replaces this path with stacking.
+- [x] **Occluded / cut sentences** — region_atoms + pack_slices. (ba45f17 iter1)
+- [x] **Tiny font on 2-col** — two_col_regions band-segmentation. (d122f9e iter2)
+- [x] **Top-align + margin** — emit_region top-align. (3759cd9 iter3)
+- [x] **Atom-stacking emitter (collapse whitespace within a page)** —
+      region_blocks + emit_stacked replace pack_slices+emit_region in the split
+      path. Metric: LeCun blank 44→35, MonoBite 12→9, density up. (iter4)
+      Remaining blanks are per-source-page partials → item #1.
 
-## Known pitfalls (from prior attempts)
+## Known pitfalls
 
-- Merging adjacent TEXT lines → whole column becomes one giant block → scaled to
-  one tiny page. Only merge FIGURE atoms.
-- A parse-OK file can still NameError at runtime — always run a real conversion,
-  not just ast.parse.
-- Tool output / image display has been intermittently dropping in this repo;
-  gate commits on the text-based coverage metric when images won't render.
+- Only merge FIGURE atoms; merging text lines makes a column one giant tiny block.
+- A parse-OK file can still NameError — always run a real conversion.
+- Image render output drops intermittently in this session; gate on the
+  text-based coverage metric and note when visual confirmation is pending.
+- emit_stacked currently resets per region/page — that's the #1 thing to change.

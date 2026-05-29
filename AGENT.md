@@ -53,3 +53,15 @@ have not rendered and viewed this iteration.
 - Keep text vector/selectable (no rasterizing).
 - One behavior change per commit; message references the fix_plan item.
 - Don't touch crop logic to fix a slicing bug — fix the slicer.
+
+## iter4 note (atom-stacking)
+- run_split split path now: region_blocks() (tag text/fig, merge ONLY fig atoms)
+  + emit_stacked() (flow blocks, gap cap 6pt, new page when full, oversized fig
+  alone). Metric improved LeCun/MonoBite blanks & density; MIT pages 84->178
+  (text now width-filled = bigger, likely more readable).
+- KEY REMAINING INSIGHT: emit_stacked resets state per region per source page,
+  so every source page leaves a partial last device page -> most remaining blank
+  pages. fix_plan #1 = one continuous flow across the whole doc. That's the big
+  remaining win to "fill the empty pages".
+- pack_slices / screen_height_src / emit_region are now UNUSED by the split path
+  (kept for reference / crop mode uses none of them). Safe to remove later.
