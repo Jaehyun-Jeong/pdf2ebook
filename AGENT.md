@@ -405,3 +405,31 @@ architecture.
   Body font must stay >=8pt; equations must stay correct vector. See PROMPT.md/fix_plan.md.
 - Build: `cd latex_src && latexmk -pdf -interaction=nonstopmode main.tex` -> main.pdf.
   Metric/render: `.venv/bin/python` + fitz, run from repo ROOT.
+
+## iter 2026-05-29 (Lever 2a — auto-fit unnumbered align* — commit ed0a10a)
+- Recompile pipeline. After Lever 1 (\small display), ~89 overfull boxes >30pt
+  remained; worst ~210pt; ~40 pages with content past the right edge. RENDER (not
+  the block metric — PyMuPDF block x1 undercounts math overflow) is authoritative:
+  p138/p193/p94/p218 showed wide display eqs running clean off the page.
+- FIX: \RenewEnviron{align*} (environ pkg) -> typeset \BODY in \aligned inside a
+  measured \sbox, \resizebox to \linewidth ONLY if \wd>\linewidth (fitting ones
+  untouched, keep their \small size). Emitted via \centerline (NOT \[...\] —
+  in THIS preamble \[ maps to equation*, so calling it inside the redef
+  re-triggers environ's equation* parser and mis-nests: "equation* ended by
+  \end{align*}"). 116 align* envs covered.
+- equation* (5 envs) DELIBERATELY EXCLUDED: redefining it via environ breaks on
+  equation* used inside mdframed remark/summary boxes ("equation* ended by
+  \end{remarkbox}") and on multi-line bodies forced into inline $...$. Low count,
+  not worth the breakage; leave native.
+- VERIFIED: build exit 0, 229pp (was 233; minor reflow from shrunk eqs). Overfull
+  118->71, >30pt 89->48, pages-past-edge(block) 40->22, body font median 9.96pt
+  UNCHANGED. Rendered p193 (q_{t2|t0} derivation): every align* row now fits the
+  column, alignment at = preserved, vector+selectable, correct. p30/p24 align*
+  equation parts fit. No regression on fitting align*.
+- STILL OVERFLOWING (next iters, by environment, NOT regressions):
+  * alignat* (7 envs) — the \blacktriangleright &&\text{...} margin annotations
+    (p24 "initial guess of new state", p30 "expression for", p138 area). Lever 2b.
+  * numbered align (100) + equation (35) — worst boxes incl. 210pt; p138 eq85/86,
+    p94 eq63/64. Can't use \aligned (loses (n) tag). Lever 2c, hardest.
+- COUNTER: code-change iter; two-clean STOP counter N/A until 2b/2c done + fresh
+  double-check. Deliverable NOT regenerated yet (overflow not ~0).

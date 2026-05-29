@@ -28,13 +28,23 @@ off), p124, p191, p192, p199, p218.
       Verified render p94/p124/p40: body unchanged ~10pt, equations smaller but
       correct. PARTIAL — wide single-line eqs + trailing `▶` margin-annotations
       still overflow; that's Lever 2's job.
-- [ ] **Lever 2 — scale the still-oversized equations** with
-      `adjustbox`/`\resizebox{\linewidth}{!}{...}` (or `breqn` auto-wrap) for any
-      equation still over the edge after Lever 1. ~77 boxes still >60pt over
-      (e.g. p94 eq 64 `□ = (z,y)∼...`, p124 `L_VAE`, p40 `▶` annotations). The
-      `▶` notes look like a custom margin-comment macro — find it (grep
-      math_commands.tex / *.tex for the ▶ / \sidenote / \rhd macro) and either
-      shrink/wrap it or pull it under the equation. Surgical; keep vector+correct.
+- [x] **Lever 2a — auto-fit UNNUMBERED `align*`** (116 envs) via environ +
+      `\resizebox` to `\linewidth` (only when wider; `\aligned` keeps the `&`
+      alignment). DONE (commit ed0a10a): overfull 118->71 (>30pt 89->48),
+      pages-past-edge 40->22, body 9.96pt unchanged, p193 derivation now fits.
+      NOTE: `equation*` (5 envs) excluded — environ mis-scans it across mdframed
+      boxes; `\[...\]` maps to equation* here so the redef must use \centerline.
+- [ ] **Lever 2b — auto-fit `alignat*`** (7 envs). These hold the `\blacktriangleright`
+      `&&\text{...}` margin annotations (p24, p30) that overflow. Same treatment as
+      2a: `\RenewEnviron{alignat*}` (note it takes a `{n}` col-count arg — drop it,
+      `\aligned` handles `&`/`&&` itself) -> `\rldisplay{...\begin{aligned}\BODY\end{aligned}...}`.
+      Test the `&&` spacing renders sanely; verify p24/p30.
+- [ ] **Lever 2c — auto-fit NUMBERED `align`/`equation`** (100 + 35 envs; worst
+      overflow, e.g. p138 eq85/86, p94 eq63/64, worst 210pt). Can't use `\aligned`
+      (loses the (n) tag). Options: (i) keep `\begin{align}` but scale rows that
+      are too wide individually; (ii) capture each numbered row, scale body in a
+      box, re-attach the tag with `\tag` + reserved space; (iii) `breqn`. Hardest;
+      test on a few. Keep tag visible and correct.
 - [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
       Only for genuinely un-shrinkable wide equations/tables; read sideways.
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
