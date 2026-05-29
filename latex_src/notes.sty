@@ -156,11 +156,35 @@
     \else
       \rloldequation\rlfitnum{$\small\displaystyle\begin{aligned}\BODY\end{aligned}$}\rloldendequation
     \fi}%
-  % amsmath shares one end routine: \endalignat and \endflalign are literally
-  % "\endalign". Redefining the align environment above clobbered \endalign with
-  % environ's cleanup, which would break the (numbered) alignat used in part_04.
-  % Repoint those siblings at the saved genuine end so they close normally.
-  \expandafter\let\expandafter\endalignat\csname endrlgenalign\endcsname
+  % Lever 2c (part-3): numbered `alignat`. Same problem/solution as align — clone
+  % the genuine env under a private name (saved BEFORE renewing alignat, while
+  % \alignat is still genuine; alignat* was renewed but alignat itself is not), then
+  % renew alignat to auto-fit. The [1] absorbs alignat's mandatory {n} column-count
+  % arg and we pass it through to both the measuring `alignedat{#1}` and the genuine
+  % clone. Multi-row uses the part-2 minipage+resizebox (preserves &&-alignment,
+  % per-row (n), \notag, \label, count); single-row routes through equation.
+  \expandafter\let\csname rlgenalignat\endcsname\alignat
+  \expandafter\let\csname endrlgenalignat\endcsname\endrlgenalign
+  \RenewEnviron{alignat}[1]{%
+    \rl@detectbreak
+    \ifrl@multi
+      \sbox\rlnumbox{$\small\displaystyle\begin{alignedat}{#1}\BODY\end{alignedat}$}%
+      \setlength\rlnatw{\dimexpr\wd\rlnumbox+30pt\relax}%
+      \ifdim\rlnatw>\linewidth
+        \par\addvspace{\abovedisplayskip}\noindent
+        \resizebox{\linewidth}{!}{%
+          \begin{minipage}{\rlnatw}\begin{rlgenalignat}{#1}\BODY\end{rlgenalignat}\end{minipage}}%
+        \par\addvspace{\belowdisplayskip}%
+      \else
+        \begin{rlgenalignat}{#1}\BODY\end{rlgenalignat}%
+      \fi
+    \else
+      \rloldequation\rlfitnum{$\small\displaystyle\begin{alignedat}{#1}\BODY\end{alignedat}$}\rloldendequation
+    \fi}%
+  % amsmath shares one end routine: \endflalign is literally "\endalign". Renewing
+  % align above clobbered \endalign with environ's cleanup, which would break a
+  % (numbered) flalign. Repoint it at the saved genuine end so it closes normally.
+  % (alignat is no longer repointed — RenewEnviron{alignat} now owns \endalignat.)
   \expandafter\let\expandafter\endflalign\csname endrlgenalign\endcsname
   % Lever 2d: auto-fit unnumbered \[ ... \] display math (see above).
   \def\[{\rldispstart}%

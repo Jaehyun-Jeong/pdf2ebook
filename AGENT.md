@@ -587,3 +587,35 @@ architecture.
   landscape it. Then re-verify (2 fresh page-sets) + regenerate the deliverable.
 - COUNTER: code-change iter; two-clean STOP counter N/A until alignat done + fresh
   double-check. Deliverable NOT regenerated yet (1 page still overflows).
+
+## iter 2026-05-29 (Lever 2c part-3 — lone numbered alignat — past-edge 1->0)
+- Last page past the paper edge was the LONE numbered `alignat{2}` (part_04 Thm17
+  SDE-extension, eq44/45, out-p68, 73.1pt over): multi-row, inside an mdframed
+  theorem box, `&&` 2-col layout (X_0 | dX_t side-by-side) + a `\notag` middle row.
+  grep confirms it is the ONLY `\begin{alignat}` in the whole source.
+- FIX (notes.sty): extended the part-2 multi-row align machinery to alignat. Saved
+  genuine `\alignat` as clone `rlgenalignat` (+ end = saved genuine `\endalign`)
+  BEFORE `\RenewEnviron{alignat}[1]` (the [1] absorbs alignat's mandatory {n} col
+  arg and is passed through). Body: \rl@detectbreak; MULTI-row measures
+  `\sbox{...\begin{alignedat}{#1}\BODY\end{alignedat}}`, and if natw+30pt>linewidth
+  emits the GENUINE clone `\begin{rlgenalignat}{#1}\BODY\end{rlgenalignat}` inside a
+  minipage{natw} \resizebox'd to \linewidth (uniform scale => &&-alignment, per-row
+  (n), \notag, \label, count all preserved); SINGLE-row routes through equation.
+- KEY ordering fix: REMOVED the old `\let\endalignat\endrlgenalign` repoint —
+  RenewEnviron{alignat} now defines \endalignat as environ's own collector end, so
+  the chain never hits the align-clobbered \endalign; keeping the repoint would have
+  destroyed environ's collection. KEPT the `\endflalign` repoint (flalign not renewed).
+- VERIFIED: build exit 0, 224pp, body font median 9.96pt UNCHANGED. pages-past-PAPER-
+  edge 1->0 (ZERO — every page now fits the 257.3pt paper). overfull>30pt 1->0; worst
+  overfull 73.1->24pt (the 14 residual ≤24pt are margin-spill into the 7.2pt geometry
+  margin, linewidth ~243 < pagewidth 257.3, still ON the paper). Rendered+Read out-p68:
+  eq(44/45) fits inside the blue theorem box, 3 rows aligned at =, X_0~p_init left /
+  dX_t= right via &&, blue-ODE + green-stochastic colors intact, \notag middle row
+  unnumbered, (44)/(45) full-size in margin. out-p55 multi-row L_FM proof (i)-(iv) +
+  underbraces + QED unchanged (NO regression on the part-2 fix).
+- MILESTONE: the wide-equation-overflow defect is RESOLVED (0 pages past the paper
+  edge). Lever 3 (landscape) NOT NEEDED. NEXT (fix_plan last item): two independent
+  from-scratch double-check render passes (include p68/p94/p124/p191/p218), then copy
+  main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf + record
+  final body font + overflow in FIXES.md.
+- COUNTER: code-change iter; two-clean STOP counter N/A until the fresh double-check.

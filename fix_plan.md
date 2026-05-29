@@ -88,16 +88,20 @@ off), p124, p191, p192, p199, p218.
       pages-past-PAPER-edge 13->1 (the authoritative metric: text/draw maxx>W+2), overfull
       >30pt 15->1, body 9.96pt, 224pp. Rendered: VAE eq(136/137), Prop1 eq(41/42) in-box,
       L_FM proof (i)-(iv) all fit w/ full-size numbers + alignment; Taylor align* unchanged.
-- [ ] **Lever 2c (align half, part 3) — the LONE numbered `alignat{2}`** (part_04
-      Thm17 SDE-extension, eq 44/45, p68; only remaining page past the paper edge,
-      73.1pt over). It is inside an mdframed theorem box and uses `&&` 2-column layout
-      (X_0|dX_t side-by-side) + a `\notag` middle row. The align minipage+resizebox
-      trick should extend to it: clone genuine alignat, wrap `\begin{rlgenalign... }`-style
-      but alignat needs its `{2}` arg + its own \start@aligned. Try: measure
-      `aligned`-of-the-body then minipage+resizebox a `\begin{rlgenalignat}{2}\BODY\end`.
-      Watch the \endalignat repoint (already aliased to genuine end) — must not re-clobber.
-- [ ] **Lever 3 — landscape (`pdflscape`) the handful that still can't fit.**
-      Only for genuinely un-shrinkable wide equations/tables; read sideways.
+- [x] **Lever 2c (align half, part 3) — the LONE numbered `alignat{2}`** (part_04
+      Thm17 SDE-extension, eq 44/45, p68). DONE (this iter): saved genuine `\alignat`
+      as clone `rlgenalignat` BEFORE renewing alignat, then `\RenewEnviron{alignat}[1]`
+      mirroring the align machinery — multi-row measures via `alignedat{#1}` then
+      minipage+resizebox the genuine clone; single-row routes through equation. REMOVED
+      the old `\endalignat\endrlgenalign` repoint (environ now owns `\endalignat`); kept
+      the `\endflalign` repoint. pages-past-PAPER-edge 1->0 (ZERO — all pages now fit),
+      overfull>30pt 1->0 (worst 73.1->24pt, all ≤24pt margin-spill still ON the page),
+      body 9.96pt unchanged, 224pp. Verified render: p68 eq(44/45) fits the theorem box
+      w/ &&-alignment, full-size (44)/(45), \notag middle row unnumbered, colors intact;
+      p55 multi-row L_FM proof (i)-(iv) unchanged (no regression).
+- [~] **Lever 3 — landscape (`pdflscape`).** NOT NEEDED: zero pages past the paper edge
+      after part-3. The 14 residual overfull \hbox are all ≤24pt (margin-spill into the
+      7.2pt geometry margin, linewidth ~243pt < pagewidth 257.3pt — still on the paper).
 - [ ] **Re-verify + document + deliver.** When overflow ~0 and body 8-10pt:
       two independent double-check render passes (include p94/p124/p191/p218),
       then copy main.pdf -> papers/ereader/MIT_flow_matching_diffusion.latex.ereader.pdf.
