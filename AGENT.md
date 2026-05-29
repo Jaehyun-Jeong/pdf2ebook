@@ -671,3 +671,18 @@ architecture.
   prose w/ inline u_t^target, ∇log p_t math + bold term-tags + blue citation links, body
   ~10pt). No overflow, no clip, design intact. No NEW defect, input unchanged => STOP
   holds, no code change.
+
+## iter 2026-05-29 (re-fire #4 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: git clean, input unchanged
+  (papers/ = MIT only, same bytes), deliverable byte-identical to main.pdf (12814730
+  bytes). Metric on main.pdf: 224pp, 257.3x347.5pt, text-past-edge=0, draw-past-edge=0,
+  worst 0.0pt; dominant body span 10.0pt, selectable — IDENTICAL to recorded STOP metric
+  (deterministic build). Rendered + Read TWO fresh pages distinct from all prior sets:
+  p101 (§6.1/6.1.2 Diffusion Transformers — PromptEmbed(y_raw)∈R^{S×k} display fits the
+  column, bold-blue channels/height/width/DiT term-tags, body ~10pt) and p175 (Appendix
+  A.2 — Gaussian PDF eq(97), expectation eq(98), LOTUS eq(99) all fit w/ full-size
+  numbers, body ~10pt). No overflow, no clip, design intact. NOTE: p175's running header
+  + bottom section-heading both reading "A.2" is standard LaTeX mark-timing in the
+  ORIGINAL arXiv source (subsection starts at page bottom), reproduced faithfully — not
+  a defect we introduced; preserving original design is required. No NEW defect, input
+  unchanged => STOP holds, no code change.
