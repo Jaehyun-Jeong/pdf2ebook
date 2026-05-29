@@ -646,3 +646,16 @@ architecture.
   ~10pt, Appendix-D link, section heading; clean) and p199 (rFID/gFID prose w/ inline
   q_φ(z)/p_data math + bold term-tags + Figure-22 link; clean). No overflow, no clip,
   design intact. No NEW defect, input unchanged => STOP holds, no code change.
+
+## iter 2026-05-29 (re-fire #2 — protocol re-verify, STOP holds)
+- Loop re-fired again post-convergence. Re-fire protocol: git clean, input unchanged
+  (papers/ = MIT only), deliverable byte-identical to main.pdf (12814730 bytes).
+  Metric on main.pdf: 224pp, 257.3x347.5pt, text-blocks-past-edge=0, draw-past-edge=0,
+  worst-past 0.0pt; dominant body span 10.0pt (11905 spans), selectable — IDENTICAL to
+  the recorded STOP metric (deterministic build). Rendered + Read TWO fresh pages
+  distinct from all prior sets: p88/89 (5.2 Classifier-Free Guidance — the formerly-
+  overflowing multi-row `align` u-tilde_t(x|y) derivation fits the column w/ cross-row
+  = alignment, full eq intact, body ~10pt) and p160/161 (7.2 Training CTMC — Figure 20
+  masked-diffusion token grid whole, gray callout box intact, body ~10pt, nothing past
+  edge). No overflow, no clip, design intact. No NEW defect, input unchanged => STOP
+  holds, no code change.
