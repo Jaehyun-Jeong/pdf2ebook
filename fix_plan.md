@@ -1,44 +1,43 @@
 # Fix Plan
 
-One item per line, ordered by priority — the top unchecked item is what the
-next loop iteration does. Verify every change by rendering pages and LOOKING.
+One item per line, top = next. Verify every change by (a) the coverage metric
+and (b) rendering pages and LOOKING. Commit only what you verified.
 
 ## To do
 
-- [ ] **#1 Collapse whitespace — kill mostly-blank pages (TOP PRIORITY).**
-      Confirmed by rendering: sparse source pages (title page, a lone trailing
-      line + page number) produce near-empty output pages, because `pack_slices`
-      cuts on big vertical gaps and `emit_region` renders the gap as whitespace.
-      Fix: replace pack_slices+emit_region for split modes with an atom-STACKING
-      emitter that lays atoms top-to-bottom on the output page with *collapsed*
-      spacing (preserve small inter-line gaps, cap large gaps at ~0.8x atom
-      height), starting a new page when full. Result: dense, pretty pages, no
-      cut lines, no blank waste. Preserve each atom's horizontal offset within
-      its region (so centered titles stay centered, columns stay left-aligned).
-- [ ] **#2 Merge clustered atoms into figures BEFORE stacking.** `region_atoms`
-      returns a figure's many sub-drawings/images as separate atoms; stacking
-      them individually would scramble a figure. Cluster atoms by proximity
-      (overlapping/near bboxes) into one composite atom rendered whole. Must land
-      together with #1 or figures break.
+- [ ] **#1 Fill empty pages / empty space (atom-stacking emitter).** Replace
+      `pack_slices` + `emit_region` in the split path of `run_split` with a
+      stacking emitter that FLOWS content blocks onto device pages with collapsed
+      whitespace (see PROMPT.md "The fix" for the full algorithm). Tag atoms
+      text vs figure; MERGE only figure atoms into composite blocks (NOT text
+      lines — merging text lines caused a 112-page blow-up before); stack blocks
+      top-to-bottom, small capped gaps, new page when full, oversized block alone
+      scaled whole; preserve horizontal offset within the region. Acceptance:
+      zero pages under ~15% coverage, no big internal blank bands, text not
+      shrunk, figures whole, lines never cut. Verify on all three papers.
+- [ ] **#2 Tune spacing for readability.** Once stacking works, pick an
+      inter-block gap that looks natural (not cramped, not loose) — try a small
+      constant (~4-6pt device) plus a slightly larger gap when the source gap was
+      large (paragraph/section breaks). Render and eyeball.
 - [ ] **#3 Re-verify reading order** on a 2-col page with a mid-page figure:
-      left-col, right-col, then the spanning figure at its y-position.
+      left column, right column, spanning figure at its y-position.
 
 ## Done
 
-- [x] **Occluded sentences / cut lines** — replaced geometric `slice_fit_width`
-      with `region_atoms()` + `pack_slices()`: groups indivisible atoms (text
-      *lines*, images, drawings) into screen-height slices, cutting only in the
-      whitespace between atoms, no overlap. A text line can no longer be
-      bisected. Verified on MIT consecutive pages. (commit iter1)
-- [x] **Tiny font on 2-col pages** — `two_col_regions()` band-segmentation:
-      full-width spans (title/abstract/wide figures) become their own full-width
-      region; two-column bands split left-then-right at `estimate_gutter()`.
-      Fixes pages that previously collapsed to one tiny full-width strip whenever
-      any element crossed the centre (the MonoBite problem). Body text now fills
-      a column. Verified on MonoBite renders. (commit iter2)
-- [x] **Prettiness / consistency** — `emit_region` top-aligns content within a
-      6pt uniform margin (was vertical-centered) so pages line up. Verified on
-      MonoBite + LeCun renders. (commit iter3)
-- [x] **Re-converted all three** to papers/ereader/, all device-sized
-      257x347pt, text preserved (MonoBite 86pp/3.9MB/27003 chars, LeCun
-      173pp/4.2MB, MIT 449pp/21.6MB).
+- [x] **Occluded / cut sentences** — `region_atoms` + `pack_slices`: cut only
+      between atoms, never through a text line. (commit ba45f17 iter1)
+- [x] **Tiny font on 2-col pages** — `two_col_regions` band-segmentation: full-
+      width spans kept whole, column bands split L-then-R; body text fills a
+      column. (commit d122f9e iter2)
+- [x] **Top-align + margin** — `emit_region` top-aligns with 6pt margin.
+      (commit 3759cd9 iter3) — NOTE: this is what leaves blank space on sparse
+      pages; #1 replaces this path with stacking.
+
+## Known pitfalls (from prior attempts)
+
+- Merging adjacent TEXT lines → whole column becomes one giant block → scaled to
+  one tiny page. Only merge FIGURE atoms.
+- A parse-OK file can still NameError at runtime — always run a real conversion,
+  not just ast.parse.
+- Tool output / image display has been intermittently dropping in this repo;
+  gate commits on the text-based coverage metric when images won't render.
