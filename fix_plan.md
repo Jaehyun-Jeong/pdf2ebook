@@ -20,9 +20,12 @@ document the achieved font and why 8pt is unreachable on 6".
       6.70pt, 141 pages, 0 blank, cov med 96.4 → 98.5%, nothing clipped (rendered
       p40/p90/p125/p73). See FIXES.md. (Could push to 0–1pt for ~+0.06pt more —
       deferred; revisit after Levers 2/3 in case they want the bezel margin back.)
-- [ ] **Lever 2 — crop to the TRUE text bbox, not the inflated ~508pt crop.**
-      Fit to the real ~497pt column. Verify no real glyph trimmed. Expect small
-      additional font gain.
+- [x] **Lever 2 — crop to the TRUE text bbox, not the inflated ~508pt crop.**
+      DONE. run_split tightens each region's x-extent to the union of its real
+      blocks (min x0..max x1) before width-fitting. Font 6.70 → 6.89pt, pages
+      141 → 146, 0 blank, cov med 98.5 → 100.4% (min 54.48%), nothing clipped
+      (rendered p40/p73/p90/p125/p128/p129 — eqs/figs/callouts/page-breaks all
+      clean). See FIXES.md.
 - [ ] **Lever 3 — per-region width-fit so a rare wide element (full-width display
       eq / wide figure / header band) does NOT force the whole page to a smaller
       scale than body prose needs.** Body regions fit to screen on their own where

@@ -118,3 +118,24 @@ edge (comfortable left/right whitespace remains — tighter margin only enlarged
 content, did not push it off). Lever 1 of the retarget done; next: Lever 2
 (crop to true text bbox) and Lever 3 (per-region width-fit), or push margin
 lower (0-1pt) if a further safe gain is wanted.
+
+iter (Lever 2 — width-fit to TRUE text bbox, font win): in run_split, before
+flowing a region's blocks, tighten the region's x-extent to the union of its
+actual block rects (min x0 .. max x1) instead of the padded/outlier-trimmed
+crop. The MIT body crop is ~508pt but the real text column is ~497-500pt, so
+the screen was being width-fit to ~8-11pt of empty side-padding. Fitting to the
+true bbox raises the whole-line scale. The union spans every block (incl. the
+widest display equation), so the widest real element exactly fills the width and
+NOTHING is ever clipped; y is left to the existing vertical flow. Verified:
+median body font 6.70pt -> 6.89pt (p90 6.78 -> 6.89), pages 141 -> 146 (the
+larger scale spills ~5 regions onto one more device page each — benign), 0 blank,
+coverage median 98.5% -> 100.4% (min 49.59% -> 54.48%). Rendered + Read dense
+body (p40 Summary-14 box + eq 32-34, p90), equation (p125 Thm-41 + eq 108/109),
+figure (p73 DiT + CLIP matrix, both whole), and a page-boundary pair (p128/p129
+eq 115-118 + heading C): equations each on their own row with attached numbers
+and inline word-tags, figures whole, callout boxes flow at body size, no line/eq
+split at the new page breaks, no detached labels, NOTHING clipped at the edge.
+Next: Lever 3 (per-region width-fit so a rare wide element doesn't shrink a whole
+page) — but note Lever 2 already union-fits per region, so for single-column MIT
+(one region/page) Lever 3's remaining gain is limited to pages where a wide eq
+forces smaller body; quantify before implementing.

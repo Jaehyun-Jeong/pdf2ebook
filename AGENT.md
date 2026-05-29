@@ -255,3 +255,25 @@ have not rendered and viewed this iteration.
   Could also push margin 2→0-1pt for ~+0.06pt but deferred (bezel safety).
 - COUNTER: this is a code-change iter (not a re-verify), so the two-clean STOP
   counter is N/A until Levers 2/3 are exhausted and a fresh double-check runs.
+
+## iter 2026-05-29 (Lever 2 — width-fit to TRUE text bbox — font 6.70→6.89pt)
+- run_split now tightens each region's x-extent to the union of its real block
+  rects (min x0 .. max x1) BEFORE flowing, instead of width-fitting the padded
+  ~508pt crop. MIT real text column ~497-500pt, so ~8-11pt of side padding was
+  being fit to screen and wasting scale. Union spans every block (incl widest
+  display eq) → widest real element exactly fills width → nothing ever clipped.
+- Verified: median font 6.70→6.89pt (p90 6.78→6.89), pages 141→146 (+5; larger
+  scale spills ~5 regions onto one more device page — benign), 0 blank, cov med
+  98.5→100.4% (min 49.59→54.48%). Rendered+Read p40 (Summary-14 box + eq 32-34),
+  p73 (DiT + CLIP figs both whole), p90 (dense body), p125 (Thm-41 + eq 108/109),
+  p128/p129 (eq 115-118 + heading C page boundary): all clean — eqs on own rows
+  with attached numbers/word-tags, figures whole, callouts at body size, no
+  line/eq split at the new breaks, no detached labels, nothing clipped. Committed.
+- NEXT: Lever 3. NOTE Lever 2 already union-fits PER region, so for single-col
+  MIT (one region per page) the residual Lever-3 gain only exists on pages where
+  a wide display equation reaches wider than the prose and thus shrinks the whole
+  page's body. Quantify how many such pages exist (and how much body font they
+  lose) BEFORE implementing — may be a small/no win for MIT. Also still optional:
+  push PAGE_MARGIN 2→1pt for ~+0.06pt (bezel safety tradeoff).
+- COUNTER: code-change iter; two-clean STOP counter stays N/A until Lever 3 is
+  resolved and a fresh from-scratch double-check runs.

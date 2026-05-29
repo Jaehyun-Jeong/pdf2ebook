@@ -710,8 +710,20 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
         regions = two_col_regions(page, crop) if two_col else [crop]
 
         for region in regions:
-            for rect, _kind in region_blocks(page, region):
-                flow.add(src, i, rect, region)
+            blocks = region_blocks(page, region)
+            # Lever 2: width-fit to the TRUE text bbox, not the padded/outlier
+            # crop. Tighten the region's x-extent to the union of its actual
+            # blocks so the widest real element exactly fills the screen. The
+            # union spans every block, so nothing is ever clipped; y is left to
+            # the vertical flow. (Empty region -> keep the crop as-is.)
+            if blocks:
+                x0 = min(r.x0 for r, _ in blocks)
+                x1 = max(r.x1 for r, _ in blocks)
+                fit_region = fitz.Rect(x0, region.y0, x1, region.y1)
+            else:
+                fit_region = region
+            for rect, _kind in blocks:
+                flow.add(src, i, rect, fit_region)
     return out
 
 
