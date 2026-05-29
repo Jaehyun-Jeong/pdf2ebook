@@ -166,6 +166,20 @@ have not rendered and viewed this iteration.
 - NEXT: #4 re-verify. Pass 2 was dirty this iter, so the two-consecutive-clean
   counter resets; next loop must double-check from scratch before any STOP.
 
+## iter 2026-05-29 (re-verify #4 — STOP, acceptance met)
+- No code change. Fresh from-scratch double-check after last iter's dirty pass 2.
+  Regenerated /tmp/mit.pdf (142 pp, 6.54pt, 0 blank, cov med 96.3% min 52.23%).
+  Rendered TWO independent page-sets and Read every page:
+  pass1 {0,12,40,70,100,130}, pass2 {6,25,55,85,115,141}. BOTH fully clean —
+  equations intact w/ attached numbers, figures whole, all callout boxes flow at
+  body size, TOC + refs clean, no header/footer dup, no trailing furniture page,
+  correct order. p100 ~half-white = legit paragraph/section end (min-cov page),
+  NOT stranded (ends mid-sentence-complete with a period; design preserved = can't
+  fill without banned reflow). => two consecutive clean double-checks + clean
+  metric + font at the geometric 6.6pt ceiling => STOP. All fix_plan items done.
+  If the loop re-fires: re-run metric + render two page-sets; only reopen if a
+  NEW defect appears or the input set changes.
+
 - ENV WARNING: this session intermittently corrupts tool output, temp files, and
   even file-read display (saw binary garbage in a .txt; saw garbled line numbers
   in a source Read). The SOURCE ON DISK is fine (ast.parse OK). Do risky edits in

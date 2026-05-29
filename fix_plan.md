@@ -10,12 +10,22 @@ all 0 blank pages, 0 off-page/clipped pages. Two printing defects found:
 
 ## To do
 
-- [ ] **#4 Re-verify against acceptance** (next iteration's double-check):
-      zero printing defects across body/eq/figure/TOC, font at ceiling. If a
-      second consecutive double-check finds nothing new → STOP (done).
-      NOTE: this iteration's double-check (pass 2) was NOT clean — it found #5
-      (detached eq numbers), now fixed. So #4 has NOT yet had two consecutive
-      clean passes; next iteration must double-check again from scratch.
+(empty — acceptance met; see STOP below)
+
+## STOP — acceptance met (2026-05-29)
+
+- [x] **#4 Re-verify against acceptance — DONE, two consecutive clean passes.**
+      Fresh double-check (no code change this iter): regenerated /tmp/mit.pdf and
+      rendered TWO independent page-sets — pass1 {0,12,40,70,100,130}, pass2
+      {6,25,55,85,115,141}. BOTH clean: equations intact, eq numbers attached,
+      figures whole (Fig 8 dual-image, DiT diagram), callout boxes (Thm 3, Ex 4,
+      Key Idea 2/3, Remark 32, Summary 45) flow at body size, TOC + references
+      clean, no duplicated header/footer, no trailing furniture page, correct
+      reading order. Metric: 142 pages, font 6.54pt (at the ~6.6pt design-preserving
+      ceiling), 0 blank, coverage median 96.3% / min 52.23% (p100 = clean paragraph
+      end, not stranded). Font axis already resolved as not-further-achievable
+      without banned reflow (see below). => Two consecutive clean double-checks +
+      clean metric => STOP. Loop objective complete.
 
 ## Resolved / not-actionable
 

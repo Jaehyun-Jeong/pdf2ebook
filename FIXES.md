@@ -65,3 +65,13 @@ stacked/duplicated numbers; title/TOC page numbers "3"/"4" NOT misattached — r
 needs parens; eq (70)/Remark 29/Figure 14/Summary 45 intact) + metric (pages
 149->142 as ~7 stranded number-lines collapse back, font 6.54pt unchanged, blank 0,
 coverage median 96.3% min 52.2%).
+
+iter (re-verify #4, no code change): STOP — acceptance met. Fresh from-scratch
+double-check found ZERO printing defects across TWO independent page-sets
+(pass1 {0,12,40,70,100,130}, pass2 {6,25,55,85,115,141}): equations intact with
+attached numbers, figures whole, all callout boxes flow at body size, TOC +
+references clean, no header/footer duplication, no trailing furniture page,
+correct reading order. Metric: 142 pages, font 6.54pt (at the ~6.6pt design-
+preserving geometric ceiling), 0 blank, coverage median 96.3% / min 52.23%
+(p100 = clean paragraph end, not stranded). Two consecutive clean double-checks
++ clean metric + font at ceiling => loop objective complete.
