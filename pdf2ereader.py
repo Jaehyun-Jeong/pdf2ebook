@@ -354,6 +354,63 @@ def emit_stacked(out: "fitz.Document", src: "fitz.Document", pno: int,
         prev_y1 = rect.y1
 
 
+class _Flow:
+    """Continuous block flow across the WHOLE document. Blocks are placed onto
+    device pages with collapsed whitespace; a new page starts only when the next
+    block won't fit — NOT at source-page boundaries. This removes the partial
+    last page that each source page used to leave behind (the main source of
+    near-empty output pages)."""
+
+    INTRA_GAP = 6.0   # max gap (device pt) between blocks within one region
+    REGION_GAP = 5.0  # gap between regions / source pages
+
+    def __init__(self, out: "fitz.Document", dev: Device) -> None:
+        self.out = out
+        self.dev = dev
+        self.avail_h = dev.height_pt - 2 * PAGE_MARGIN
+        self.page = None
+        self.y = PAGE_MARGIN
+        self.prev_y1 = None
+        self.prev_region = None
+
+    def _new_page(self) -> None:
+        self.page = self.out.new_page(width=self.dev.width_pt, height=self.dev.height_pt)
+        self.y = PAGE_MARGIN
+
+    def add(self, src: "fitz.Document", pno: int, rect: "fitz.Rect",
+            region: "fitz.Rect") -> None:
+        scale = (self.dev.width_pt - 2 * PAGE_MARGIN) / region.width
+        bw, bh = rect.width * scale, rect.height * scale
+
+        if bh > self.avail_h:  # oversized figure: its own page, whole
+            fit = min((self.dev.width_pt - 2 * PAGE_MARGIN) / rect.width,
+                      self.avail_h / rect.height)
+            w, h = rect.width * fit, rect.height * fit
+            p = self.out.new_page(width=self.dev.width_pt, height=self.dev.height_pt)
+            x = (self.dev.width_pt - w) / 2
+            p.show_pdf_page(fitz.Rect(x, PAGE_MARGIN, x + w, PAGE_MARGIN + h),
+                            src, pno, clip=rect)
+            self.page, self.prev_y1, self.prev_region = None, None, None
+            return
+
+        if self.prev_y1 is None or region is not self.prev_region:
+            gap = 0.0 if self.page is None else self.REGION_GAP
+        else:
+            gap = min(max(0.0, rect.y0 - self.prev_y1) * scale, self.INTRA_GAP)
+
+        if self.page is None or self.y + gap + bh > PAGE_MARGIN + self.avail_h:
+            self._new_page()
+            gap = 0.0
+
+        self.y += gap
+        x = PAGE_MARGIN + (rect.x0 - region.x0) * scale
+        self.page.show_pdf_page(fitz.Rect(x, self.y, x + bw, self.y + bh),
+                                src, pno, clip=rect)
+        self.y += bh
+        self.prev_y1 = rect.y1
+        self.prev_region = region
+
+
 def _merge_y_bands(rects: list["fitz.Rect"], crop: "fitz.Rect") -> list["fitz.Rect"]:
     """Merge rects with overlapping/adjacent y-intervals into full-width bands."""
     if not rects:
@@ -523,6 +580,7 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
     """Rebuild as a new device-sized PDF: crop, optionally split columns,
     fit-to-width and vertically slice each region."""
     out = fitz.open()
+    flow = _Flow(out, dev)
     for i, page in enumerate(src):
         crop = crops.get(i) or page_content_bbox(page) or fitz.Rect(page.rect)
         crop = crop & page.rect
@@ -530,10 +588,8 @@ def run_split(src: "fitz.Document", crops: dict[int, "fitz.Rect"],
         regions = two_col_regions(page, crop) if two_col else [crop]
 
         for region in regions:
-            blocks = region_blocks(page, region)
-            if not blocks:
-                continue
-            emit_stacked(out, src, i, region, blocks, dev)
+            for rect, _kind in region_blocks(page, region):
+                flow.add(src, i, rect, region)
     return out
 
 
