@@ -7,3 +7,5 @@ papers/**/*.Zone.Identifier
 *:Zone.Identifier
 /tmp/
 diag/
+diag*/
+loop.log
